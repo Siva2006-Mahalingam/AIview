@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Loader2, Send, User } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { useScribe, CommitStrategy } from "@elevenlabs/react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   role: "user" | "assistant";
@@ -16,14 +18,20 @@ interface InterviewChatProps {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/interview-chat`;
+const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 
 export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingTranscript = useRef("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,50 +41,109 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
     scrollToBottom();
   }, [messages]);
 
-  // Initialize interview with first question
-  useEffect(() => {
-    const initInterview = async () => {
-      setIsInitializing(true);
-      try {
-        const response = await fetch(CHAT_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [],
-            interviewType,
-            role,
-            isInit: true,
-          }),
-        });
+  // Text-to-speech function
+  const speakText = useCallback(async (text: string) => {
+    if (!voiceEnabled || !text.trim()) return;
 
-        if (response.status === 429) {
-          toast.error("Rate limit exceeded. Please try again later.");
-          return;
-        }
-        if (response.status === 402) {
-          toast.error("Payment required. Please add credits.");
-          return;
-        }
-        if (!response.ok || !response.body) {
-          throw new Error("Failed to start interview");
-        }
+    setIsSpeaking(true);
+    try {
+      const response = await fetch(TTS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text, voiceId: "JBFqnCBsd6RMkjVDRZzb" }),
+      });
 
-        await streamResponse(response);
-      } catch (error) {
-        console.error("Init error:", error);
-        toast.error("Failed to start interview. Please try again.");
-      } finally {
-        setIsInitializing(false);
+      if (!response.ok) {
+        throw new Error("TTS failed");
       }
-    };
 
-    initInterview();
-  }, [interviewType, role]);
+      const data = await response.json();
+      const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+      
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      
+      await audio.play();
+    } catch (error) {
+      console.error("TTS error:", error);
+      setIsSpeaking(false);
+    }
+  }, [voiceEnabled]);
 
-  const streamResponse = async (response: Response) => {
+  // Speech-to-text using ElevenLabs useScribe
+  const scribe = useScribe({
+    modelId: "scribe_v2_realtime",
+    commitStrategy: CommitStrategy.VAD,
+    onPartialTranscript: (data) => {
+      pendingTranscript.current = data.text;
+      setInput(data.text);
+    },
+    onCommittedTranscript: (data) => {
+      if (data.text.trim()) {
+        setInput(data.text);
+        pendingTranscript.current = "";
+      }
+    },
+  });
+
+  const startListening = useCallback(async () => {
+    try {
+      // Stop any current audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        setIsSpeaking(false);
+      }
+
+      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
+      
+      if (error || !data?.token) {
+        throw new Error("Failed to get scribe token");
+      }
+
+      await scribe.connect({
+        token: data.token,
+        microphone: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      
+      setIsListening(true);
+      toast.success("Listening... Speak now!");
+    } catch (error) {
+      console.error("STT error:", error);
+      toast.error("Failed to start voice input. Please check microphone permissions.");
+    }
+  }, [scribe]);
+
+  const stopListening = useCallback(() => {
+    scribe.disconnect();
+    setIsListening(false);
+    
+    // Auto-send if there's content
+    const transcript = input.trim() || pendingTranscript.current.trim();
+    if (transcript) {
+      setInput(transcript);
+      // Trigger send after a brief delay
+      setTimeout(() => {
+        const sendBtn = document.getElementById("send-btn");
+        if (sendBtn) sendBtn.click();
+      }, 300);
+    }
+  }, [scribe, input]);
+
+  // Stream AI response
+  const streamResponse = async (response: Response): Promise<string> => {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let textBuffer = "";
@@ -122,7 +189,57 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
         }
       }
     }
+
+    return assistantContent;
   };
+
+  // Initialize interview
+  useEffect(() => {
+    const initInterview = async () => {
+      setIsInitializing(true);
+      try {
+        const response = await fetch(CHAT_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: [],
+            interviewType,
+            role,
+            isInit: true,
+          }),
+        });
+
+        if (response.status === 429) {
+          toast.error("Rate limit exceeded. Please try again later.");
+          return;
+        }
+        if (response.status === 402) {
+          toast.error("Payment required. Please add credits.");
+          return;
+        }
+        if (!response.ok || !response.body) {
+          throw new Error("Failed to start interview");
+        }
+
+        const fullResponse = await streamResponse(response);
+        
+        // Speak the first message
+        if (voiceEnabled && fullResponse) {
+          await speakText(fullResponse);
+        }
+      } catch (error) {
+        console.error("Init error:", error);
+        toast.error("Failed to start interview. Please try again.");
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initInterview();
+  }, [interviewType, role, speakText, voiceEnabled]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -158,7 +275,12 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
         throw new Error("Failed to send message");
       }
 
-      await streamResponse(response);
+      const fullResponse = await streamResponse(response);
+      
+      // Speak the response
+      if (voiceEnabled && fullResponse) {
+        await speakText(fullResponse);
+      }
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to get response. Please try again.");
@@ -173,6 +295,15 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const toggleVoice = () => {
+    if (isSpeaking && audioRef.current) {
+      audioRef.current.pause();
+      setIsSpeaking(false);
+    }
+    setVoiceEnabled(!voiceEnabled);
+    toast.info(voiceEnabled ? "Voice output disabled" : "Voice output enabled");
   };
 
   return (
@@ -193,9 +324,26 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
               <p className="text-xs text-muted-foreground">{role}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-interview-success animate-pulse" />
-            <span className="text-xs text-muted-foreground">AI Interviewer Active</span>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleVoice}
+              className={voiceEnabled ? "text-primary" : "text-muted-foreground"}
+            >
+              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
+            <div className="flex items-center gap-2">
+              {isSpeaking && (
+                <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+              )}
+              {isListening && (
+                <span className="flex h-2 w-2 rounded-full bg-destructive animate-pulse" />
+              )}
+              <span className="text-xs text-muted-foreground">
+                {isSpeaking ? "AI Speaking..." : isListening ? "Listening..." : "AI Ready"}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -274,25 +422,42 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
       <div className="border-t border-border bg-card px-4 py-4">
         <div className="container mx-auto max-w-3xl">
           <div className="flex items-end gap-3">
+            {/* Voice input button */}
+            <Button
+              variant={isListening ? "destructive" : "outline"}
+              size="icon"
+              onClick={isListening ? stopListening : startListening}
+              disabled={isLoading || isInitializing || isSpeaking}
+              className={`h-12 w-12 rounded-xl shrink-0 ${isListening ? "animate-pulse" : ""}`}
+            >
+              {isListening ? (
+                <MicOff className="h-5 w-5" />
+              ) : (
+                <Mic className="h-5 w-5" />
+              )}
+            </Button>
+
             <div className="relative flex-1">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your answer..."
+                placeholder={isListening ? "Listening..." : "Type or speak your answer..."}
                 rows={1}
                 className="w-full resize-none rounded-xl border border-input bg-background px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 style={{ maxHeight: "150px" }}
-                disabled={isLoading || isInitializing}
+                disabled={isLoading || isInitializing || isListening}
               />
             </div>
+
             <Button
+              id="send-btn"
               variant="interview"
               size="icon"
               onClick={sendMessage}
               disabled={!input.trim() || isLoading || isInitializing}
-              className="h-12 w-12 rounded-xl"
+              className="h-12 w-12 rounded-xl shrink-0"
             >
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -302,7 +467,7 @@ export const InterviewChat = ({ interviewType, role, onEnd }: InterviewChatProps
             </Button>
           </div>
           <p className="mt-2 text-center text-xs text-muted-foreground">
-            Press Enter to send, Shift + Enter for new line
+            🎤 Click mic to speak • Enter to send • AI will respond with voice
           </p>
         </div>
       </div>
