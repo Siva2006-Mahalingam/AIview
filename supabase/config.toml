@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.elevenlabs-tts]
 verify_jwt = false
+
+[functions.extract-resume]
+verify_jwt = false
+
+[functions.analyze-emotion]
+verify_jwt = false
+
+[functions.generate-feedback]
+verify_jwt = false

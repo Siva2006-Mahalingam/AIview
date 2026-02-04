@@ -1,57 +1,14 @@
-import { useState } from "react";
 import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
-import { InterviewSetup } from "@/components/InterviewSetup";
-import { InterviewChat } from "@/components/InterviewChat";
-
-type AppState = "landing" | "setup" | "interview";
-
-interface InterviewConfig {
-  type: string;
-  role: string;
-}
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
-  const [appState, setAppState] = useState<AppState>("landing");
-  const [interviewConfig, setInterviewConfig] = useState<InterviewConfig | null>(null);
+  const navigate = useNavigate();
 
   const handleStartSetup = () => {
-    setAppState("setup");
+    navigate("/auth");
   };
-
-  const handleStartInterview = (type: string, role: string) => {
-    setInterviewConfig({ type, role });
-    setAppState("interview");
-  };
-
-  const handleEndInterview = () => {
-    setAppState("landing");
-    setInterviewConfig(null);
-  };
-
-  const handleBackToLanding = () => {
-    setAppState("landing");
-  };
-
-  if (appState === "interview" && interviewConfig) {
-    return (
-      <InterviewChat
-        interviewType={interviewConfig.type}
-        role={interviewConfig.role}
-        onEnd={handleEndInterview}
-      />
-    );
-  }
-
-  if (appState === "setup") {
-    return (
-      <InterviewSetup
-        onStart={handleStartInterview}
-        onBack={handleBackToLanding}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">

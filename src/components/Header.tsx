@@ -1,11 +1,40 @@
-import { MessageSquare, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { MessageSquare, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 interface HeaderProps {
   onStartInterview?: () => void;
 }
 
 export const Header = ({ onStartInterview }: HeaderProps) => {
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+    };
+
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleStartClick = () => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      navigate("/auth");
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -25,10 +54,30 @@ export const Header = ({ onStartInterview }: HeaderProps) => {
           </a>
         </nav>
 
-        <Button variant="hero" size="sm" onClick={onStartInterview} className="gap-2">
-          <Sparkles className="h-4 w-4" />
-          Start Interview
-        </Button>
+        <div className="flex items-center gap-3">
+          {isAuthenticated ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+                <User className="h-4 w-4 mr-2" />
+                Dashboard
+              </Button>
+              <Button variant="hero" size="sm" onClick={() => navigate("/interview-setup")} className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                New Interview
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
+                Sign In
+              </Button>
+              <Button variant="hero" size="sm" onClick={handleStartClick} className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Get Started
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

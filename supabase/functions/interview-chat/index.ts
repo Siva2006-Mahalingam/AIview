@@ -5,42 +5,60 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const getSystemPrompt = (interviewType: string, role: string) => {
+const getSystemPrompt = (interviewType: string, role: string, resumeText?: string) => {
+  let resumeContext = "";
+  if (resumeText) {
+    resumeContext = `
+
+CANDIDATE'S RESUME:
+${resumeText}
+
+Use this resume information to:
+- Ask specific questions about their listed experiences and projects
+- Reference their skills and technologies mentioned
+- Ask follow-up questions about specific achievements
+- Tailor questions to their background and career trajectory`;
+  }
+
   const basePrompt = `You are an experienced, professional AI interviewer conducting a mock interview. The candidate is interviewing for a ${role} position.
+${resumeContext}
 
 Your role is to:
 1. Ask thoughtful, relevant interview questions one at a time
-2. Listen carefully to responses and ask follow-up questions when appropriate
-3. Provide a realistic interview experience
-4. Be encouraging but professional
-5. After 5-7 questions, wrap up the interview with brief constructive feedback
+2. If you have resume information, ask specific questions about their experiences
+3. Listen carefully to responses and ask follow-up questions when appropriate
+4. Provide a realistic interview experience
+5. Be encouraging but professional
+6. After 5-7 questions, wrap up the interview with brief constructive feedback
 
 Guidelines:
 - Keep questions clear and concise
 - Wait for responses before moving to the next question
 - Maintain a natural conversational flow
-- Be supportive and help the candidate feel comfortable`;
+- Be supportive and help the candidate feel comfortable
+- Reference specific items from their resume when asking questions`;
 
   const typePrompts: Record<string, string> = {
     behavioral: `
 Focus on behavioral questions using the STAR method (Situation, Task, Action, Result).
 Ask about past experiences, challenges overcome, teamwork, leadership, and problem-solving.
+Reference specific projects or experiences from their resume.
 Example topics: conflict resolution, handling pressure, learning from failure, collaboration.`,
     technical: `
 Focus on technical questions relevant to the ${role} position.
 Cover concepts, problem-solving approaches, and technical scenarios.
-Ask about specific technologies, methodologies, and best practices.
-Include some practical scenario-based questions.`,
-    case: `
+Ask about specific technologies listed on their resume.
+Include practical scenario-based questions related to their experience.`,
+    "case-study": `
 Present business case studies and strategic problems.
 Ask the candidate to walk through their thinking process.
 Focus on analytical skills, problem decomposition, and strategic thinking.
-Probe their assumptions and reasoning.`,
+Relate cases to their industry experience from their resume.`,
     general: `
 Ask common interview questions that apply to any role.
 Cover motivation, career goals, strengths/weaknesses, and work style.
-Include questions about the candidate's background and aspirations.
-Ask about their interest in the role and company.`,
+Ask about specific experiences from their resume.
+Include questions about their interest in the role and company.`,
   };
 
   return `${basePrompt}
@@ -55,14 +73,14 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, interviewType, role, isInit } = await req.json();
+    const { messages, interviewType, role, resumeText, isInit } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = getSystemPrompt(interviewType || "general", role || "professional");
+    const systemPrompt = getSystemPrompt(interviewType || "general", role || "professional", resumeText);
 
     const apiMessages = [
       { role: "system", content: systemPrompt },
