@@ -14,13 +14,201 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      emotion_snapshots: {
+        Row: {
+          captured_at: string
+          confidence_level: number | null
+          emotions: Json
+          id: string
+          is_nervous: boolean | null
+          session_id: string
+          snapshot_url: string | null
+        }
+        Insert: {
+          captured_at?: string
+          confidence_level?: number | null
+          emotions?: Json
+          id?: string
+          is_nervous?: boolean | null
+          session_id: string
+          snapshot_url?: string | null
+        }
+        Update: {
+          captured_at?: string
+          confidence_level?: number | null
+          emotions?: Json
+          id?: string
+          is_nervous?: boolean | null
+          session_id?: string
+          snapshot_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emotion_snapshots_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "interview_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_questions: {
+        Row: {
+          answer: string | null
+          created_at: string
+          feedback: string | null
+          id: string
+          question: string
+          question_number: number
+          score: number | null
+          session_id: string
+        }
+        Insert: {
+          answer?: string | null
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          question: string
+          question_number: number
+          score?: number | null
+          session_id: string
+        }
+        Update: {
+          answer?: string | null
+          created_at?: string
+          feedback?: string | null
+          id?: string
+          question?: string
+          question_number?: number
+          score?: number | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_questions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "interview_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_sessions: {
+        Row: {
+          ats_score: number | null
+          ended_at: string | null
+          id: string
+          improvements: string | null
+          interview_type: string
+          overall_feedback: string | null
+          performance_percentage: number | null
+          resume_id: string | null
+          role: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          ats_score?: number | null
+          ended_at?: string | null
+          id?: string
+          improvements?: string | null
+          interview_type: string
+          overall_feedback?: string | null
+          performance_percentage?: number | null
+          resume_id?: string | null
+          role: string
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          ats_score?: number | null
+          ended_at?: string | null
+          id?: string
+          improvements?: string | null
+          interview_type?: string
+          overall_feedback?: string | null
+          performance_percentage?: number | null
+          resume_id?: string | null
+          role?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_sessions_resume_id_fkey"
+            columns: ["resume_id"]
+            isOneToOne: false
+            referencedRelation: "resumes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      resumes: {
+        Row: {
+          file_url: string
+          id: string
+          ocr_text: string | null
+          original_filename: string
+          uploaded_at: string
+          user_id: string
+        }
+        Insert: {
+          file_url: string
+          id?: string
+          ocr_text?: string | null
+          original_filename: string
+          uploaded_at?: string
+          user_id: string
+        }
+        Update: {
+          file_url?: string
+          id?: string
+          ocr_text?: string | null
+          original_filename?: string
+          uploaded_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_session_owner: { Args: { session_uuid: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
