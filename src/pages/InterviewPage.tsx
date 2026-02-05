@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmotionCapture } from "@/components/EmotionCapture";
+import { SystemCheck } from "@/components/SystemCheck";
+import { useAntiCheat } from "@/hooks/useAntiCheat";
+import { useVideoRecorder } from "@/hooks/useVideoRecorder";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
@@ -36,6 +39,7 @@ export const InterviewPage = () => {
   const navigate = useNavigate();
   const state = location.state as LocationState | null;
 
+  const [showSystemCheck, setShowSystemCheck] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +52,7 @@ export const InterviewPage = () => {
   const [currentEmotions, setCurrentEmotions] = useState<EmotionData | null>(null);
   const [interviewDuration, setInterviewDuration] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
+  const [antiCheatWarnings, setAntiCheatWarnings] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -69,13 +74,29 @@ export const InterviewPage = () => {
     getUser();
   }, [navigate]);
 
+  // Anti-cheat tracking
+  useAntiCheat({
+    sessionId: sessionId || "",
+    isActive: !showSystemCheck && !isInitializing,
+    onFullscreenExit: () => {
+      setAntiCheatWarnings((prev) => prev + 1);
+    },
+  });
+
+  // Video recorder (optional - can be enabled per question)
+  const videoRecorder = useVideoRecorder({
+    sessionId: sessionId || "",
+    userId: userId || "",
+  });
+
   // Track interview duration
   useEffect(() => {
+    if (showSystemCheck) return;
     const timer = setInterval(() => {
       setInterviewDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [showSystemCheck]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -232,12 +253,15 @@ export const InterviewPage = () => {
 
   // Initialize interview
   useEffect(() => {
+    if (showSystemCheck) return; // Wait for system check to complete
+    
     const initInterview = async () => {
       if (!sessionId || !state) {
         navigate("/dashboard");
         return;
       }
 
+      startTimeRef.current = Date.now();
       setIsInitializing(true);
       try {
         const response = await fetch(CHAT_URL, {
@@ -279,7 +303,7 @@ export const InterviewPage = () => {
     };
 
     initInterview();
-  }, [sessionId, state, speakText, voiceEnabled, navigate]);
+  }, [sessionId, state, speakText, voiceEnabled, navigate, showSystemCheck]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -348,6 +372,11 @@ export const InterviewPage = () => {
   };
 
   const handleEndInterview = async () => {
+    // Exit fullscreen if active
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => {});
+    }
+    
     // Navigate to results with Q&A data
     navigate(`/results/${sessionId}`, {
       state: {
@@ -365,6 +394,16 @@ export const InterviewPage = () => {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Show system check first
+  if (showSystemCheck) {
+    return (
+      <SystemCheck
+        onComplete={() => setShowSystemCheck(false)}
+        onCancel={() => navigate("/dashboard")}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen bg-interview-bg">
       {/* Sidebar with camera */}
@@ -377,7 +416,7 @@ export const InterviewPage = () => {
                 sessionId={sessionId}
                 userId={userId}
                 isActive={!isInitializing}
-                captureInterval={30000}
+                captureInterval={120000}
                 onEmotionCaptured={handleEmotionCaptured}
               />
             ) : (
@@ -425,6 +464,23 @@ export const InterviewPage = () => {
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {currentEmotions.is_nervous ? "You seem nervous. Take a deep breath!" : "Looking confident!"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Anti-cheat warnings */}
+        {antiCheatWarnings > 0 && (
+          <div className="px-4 pb-4">
+            <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">
+                  {antiCheatWarnings} warning{antiCheatWarnings > 1 ? "s" : ""}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Fullscreen exits and tab switches are being tracked.
               </p>
             </div>
           </div>

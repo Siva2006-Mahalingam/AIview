@@ -27,7 +27,7 @@ export const EmotionCapture = ({
   sessionId,
   userId,
   isActive,
-  captureInterval = 30000, // 30 seconds default
+  captureInterval = 120000, // 2 minutes default to avoid rate limits
   onEmotionCaptured,
 }: EmotionCaptureProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
