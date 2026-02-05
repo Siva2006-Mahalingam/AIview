@@ -62,6 +62,7 @@ export type Database = {
           question_number: number
           score: number | null
           session_id: string
+          video_url: string | null
         }
         Insert: {
           answer?: string | null
@@ -72,6 +73,7 @@ export type Database = {
           question_number: number
           score?: number | null
           session_id: string
+          video_url?: string | null
         }
         Update: {
           answer?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           question_number?: number
           score?: number | null
           session_id?: string
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -97,6 +100,7 @@ export type Database = {
         Row: {
           ats_score: number | null
           ended_at: string | null
+          fullscreen_exits: number | null
           id: string
           improvements: string | null
           interview_type: string
@@ -106,11 +110,14 @@ export type Database = {
           role: string
           started_at: string
           status: string
+          tab_switches: number | null
           user_id: string
+          window_resizes: number | null
         }
         Insert: {
           ats_score?: number | null
           ended_at?: string | null
+          fullscreen_exits?: number | null
           id?: string
           improvements?: string | null
           interview_type: string
@@ -120,11 +127,14 @@ export type Database = {
           role: string
           started_at?: string
           status?: string
+          tab_switches?: number | null
           user_id: string
+          window_resizes?: number | null
         }
         Update: {
           ats_score?: number | null
           ended_at?: string | null
+          fullscreen_exits?: number | null
           id?: string
           improvements?: string | null
           interview_type?: string
@@ -134,7 +144,9 @@ export type Database = {
           role?: string
           started_at?: string
           status?: string
+          tab_switches?: number | null
           user_id?: string
+          window_resizes?: number | null
         }
         Relationships: [
           {
@@ -203,15 +215,43 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       is_session_owner: { Args: { session_uuid: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -338,6 +378,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
