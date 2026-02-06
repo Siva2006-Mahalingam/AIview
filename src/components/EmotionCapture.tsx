@@ -114,7 +114,7 @@ export const EmotionCapture = ({
       }, captureInterval);
 
       // Initial capture after a short delay
-      setTimeout(() => captureAndAnalyze(), 2000);
+      setTimeout(() => captureAndAnalyze(), 120000);
     } else {
       stopCamera();
       if (intervalRef.current) {
