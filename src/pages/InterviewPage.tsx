@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmotionCapture } from "@/components/EmotionCapture";
+import { CameraPreview, CameraPreviewRef } from "@/components/CameraPreview";
 import { SystemCheck } from "@/components/SystemCheck";
 import { useAntiCheat } from "@/hooks/useAntiCheat";
 import { useVideoRecorder } from "@/hooks/useVideoRecorder";
@@ -59,7 +59,8 @@ export const InterviewPage = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingTranscript = useRef("");
   const startTimeRef = useRef(Date.now());
-  const qaRef = useRef<{ question: string; answer: string; number: number }[]>([]);
+  const qaRef = useRef<{ question: string; answer: string; number: number; videoUrl?: string }[]>([]);
+  const cameraRef = useRef<CameraPreviewRef>(null);
 
   // Get user ID on mount
   useEffect(() => {
@@ -411,10 +412,10 @@ export const InterviewPage = () => {
         {/* Camera View */}
         <div className="p-4">
           <div className="aspect-video rounded-xl overflow-hidden bg-secondary mb-4">
-            {cameraEnabled && userId && sessionId ? (
-              <EmotionCapture
+            {cameraEnabled && sessionId ? (
+              <CameraPreview
+                ref={cameraRef}
                 sessionId={sessionId}
-                userId={userId}
                 isActive={!isInitializing}
                 captureInterval={120000}
                 onEmotionCaptured={handleEmotionCaptured}
