@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// Admin email allowlist - stored in env or hardcoded for now
-const ADMIN_EMAILS = ["admin@interviewai.com"]; // Add your admin emails here
+// Admin email allowlist
+const ADMIN_EMAILS = ["231001203@rajalakshmi.edu.in"];
 
 interface UserStats {
   id: string;
