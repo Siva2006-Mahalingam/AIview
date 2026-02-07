@@ -17,9 +17,11 @@ function isHttpUrl(value: string) {
 export function QuestionVideoDialog({
   videoRef,
   title = "Answer video",
+  trigger,
 }: {
   videoRef: string;
   title?: string;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -68,10 +70,12 @@ export function QuestionVideoDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Play className="h-4 w-4 mr-1" />
-          Video
-        </Button>
+        {trigger || (
+          <Button variant="outline" size="sm">
+            <Play className="h-4 w-4 mr-1" />
+            Video
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>

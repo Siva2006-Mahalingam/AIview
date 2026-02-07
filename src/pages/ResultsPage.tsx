@@ -3,6 +3,7 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { PdfExportButton } from "@/components/results/PdfExportButton";
 import {
   ArrowLeft,
   Loader2,
@@ -13,7 +14,6 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  Download,
   Home,
   RotateCcw,
 } from "lucide-react";
@@ -209,10 +209,19 @@ export const ResultsPage = () => {
             Back to Dashboard
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
+            <PdfExportButton
+              sessionData={{
+                interviewType: state?.interviewType,
+                role: state?.role,
+                atsScore,
+                performancePercentage,
+                overallFeedback,
+                improvements,
+                questions,
+                emotionSummary,
+                date: new Date().toLocaleDateString(),
+              }}
+            />
           </div>
         </div>
       </header>
