@@ -31,7 +31,8 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isInitializedRef = useRef(false);
 
     // Expose stream getter to parent
@@ -65,6 +66,11 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
 
       if (streamRef.current) {
@@ -123,37 +129,34 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
     }, [sessionId, onEmotionCaptured]);
 
     useEffect(() => {
-      if (isActive) {
-        startCamera();
-
-        // Start periodic capture after camera is ready
-        const startCapture = () => {
-          if (intervalRef.current) return;
-
-          intervalRef.current = setInterval(() => {
-            captureAndAnalyze();
-          }, captureInterval);
-
-          // First capture after 2 minutes
-          setTimeout(() => captureAndAnalyze(), captureInterval);
-        };
-
-        // Wait for camera to be ready
-        const checkReady = setInterval(() => {
-          if (streamRef.current && videoRef.current?.readyState >= 2) {
-            clearInterval(checkReady);
-            startCapture();
-          }
-        }, 500);
-
-        return () => {
-          clearInterval(checkReady);
-        };
-      } else {
+      if (!isActive) {
         stopCamera();
+        return;
       }
 
+      startCamera();
+
+      const startCapture = () => {
+        if (intervalRef.current) return;
+
+        intervalRef.current = setInterval(() => {
+          captureAndAnalyze();
+        }, captureInterval);
+
+        // First capture after interval
+        timeoutRef.current = setTimeout(() => captureAndAnalyze(), captureInterval);
+      };
+
+      // Wait for camera to be ready
+      const checkReady = setInterval(() => {
+        if (streamRef.current && videoRef.current?.readyState >= 2) {
+          clearInterval(checkReady);
+          startCapture();
+        }
+      }, 500);
+
       return () => {
+        clearInterval(checkReady);
         stopCamera();
       };
     }, [isActive, captureInterval, startCamera, stopCamera, captureAndAnalyze]);
