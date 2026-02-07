@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { QuestionVideoDialog } from "@/components/history/QuestionVideoDialog";
 import {
   ArrowLeft,
   Loader2,
@@ -9,7 +10,6 @@ import {
   Trophy,
   Target,
   ChevronRight,
-  Play,
   MessageSquare,
 } from "lucide-react";
 
@@ -292,14 +292,10 @@ export const HistoryPage = () => {
 
                               {/* Video playback */}
                               {q.video_url && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => window.open(q.video_url!, "_blank")}
-                                >
-                                  <Play className="h-4 w-4 mr-1" />
-                                  Video
-                                </Button>
+                                <QuestionVideoDialog
+                                  videoRef={q.video_url}
+                                  title={`Question ${q.question_number} – Answer video`}
+                                />
                               )}
                             </div>
                           </div>

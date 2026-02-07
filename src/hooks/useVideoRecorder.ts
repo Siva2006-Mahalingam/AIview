@@ -23,9 +23,17 @@ export const useVideoRecorder = ({ sessionId, userId }: VideoRecorderOptions) =>
         chunksRef.current = [];
         setCurrentQuestionNumber(questionNumber);
 
-        const mediaRecorder = new MediaRecorder(existingStream, {
-          mimeType: "video/webm;codecs=vp9",
-        });
+        const preferredTypes = [
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8,opus",
+          "video/webm",
+        ];
+        const mimeType = preferredTypes.find((t) => MediaRecorder.isTypeSupported(t));
+
+        const mediaRecorder = new MediaRecorder(
+          existingStream,
+          mimeType ? { mimeType } : undefined
+        );
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
@@ -62,7 +70,7 @@ export const useVideoRecorder = ({ sessionId, userId }: VideoRecorderOptions) =>
           return;
         }
 
-        // Upload to Supabase Storage
+        // Upload to Storage (private bucket) — store the *path* in DB, not a public URL
         const fileName = `${userId}/${sessionId}/q${currentQuestionNumber}-${Date.now()}.webm`;
 
         try {
@@ -79,16 +87,12 @@ export const useVideoRecorder = ({ sessionId, userId }: VideoRecorderOptions) =>
             return;
           }
 
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from("answer-videos")
-            .getPublicUrl(fileName);
-
           setIsRecording(false);
           setCurrentQuestionNumber(null);
           chunksRef.current = [];
 
-          resolve(urlData.publicUrl);
+          // Return storage path; History will generate a signed URL
+          resolve(fileName);
         } catch (error) {
           console.error("Failed to upload video:", error);
           resolve(null);
