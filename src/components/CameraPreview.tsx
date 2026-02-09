@@ -50,11 +50,27 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
           audio: true,
         });
 
+        // Check if component is still active before setting stream
+        if (!isInitializedRef.current) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
         streamRef.current = stream;
 
         if (videoRef.current) {
+          // Cancel any pending play requests
+          videoRef.current.pause();
           videoRef.current.srcObject = stream;
-          await videoRef.current.play();
+          
+          // Use play with catch for AbortError
+          try {
+            await videoRef.current.play();
+          } catch (playError) {
+            if ((playError as Error).name !== 'AbortError') {
+              console.error("Video play error:", playError);
+            }
+          }
         }
       } catch (error) {
         console.error("Failed to access camera:", error);
