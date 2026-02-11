@@ -107,7 +107,6 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       if (!ctx || video.readyState < 2) return;
 
       // Set canvas size to match video
-      //testing
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
 
