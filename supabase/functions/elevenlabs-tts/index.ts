@@ -47,6 +47,22 @@ serve(async (req) => {
     if (!response.ok) {
       const error = await response.text();
       console.error("ElevenLabs TTS error:", response.status, error);
+      
+      // Return specific error for quota/billing issues
+      if (response.status === 401 || response.status === 403) {
+        return new Response(
+          JSON.stringify({ 
+            error: "TTS service unavailable", 
+            fallback: true,
+            message: "Voice synthesis temporarily unavailable. Using text display instead."
+          }),
+          {
+            status: 200, // Return 200 so frontend can handle gracefully
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
       throw new Error("Failed to generate speech");
     }
 

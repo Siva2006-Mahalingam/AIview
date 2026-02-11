@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2 } from "lucide-react";
+import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2, BarChart3, Trophy, Zap } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -143,7 +143,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <button
             onClick={handleStartInterview}
             className="group bg-gradient-to-br from-primary to-accent p-6 rounded-2xl text-left hover:shadow-glow transition-all duration-300"
@@ -155,10 +155,28 @@ export const Dashboard = () => {
               <ArrowRight className="h-5 w-5 text-primary-foreground opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
             </div>
             <h3 className="text-xl font-semibold text-primary-foreground mb-1">
-              Start New Interview
+              Start Interview
             </h3>
             <p className="text-primary-foreground/80 text-sm">
-              Upload your resume and begin a practice session
+              Full practice with scoring & recording
+            </p>
+          </button>
+
+          <button
+            onClick={() => navigate("/practice")}
+            className="group bg-card border border-border p-6 rounded-2xl text-left hover:shadow-lg transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-interview-warning/20 flex items-center justify-center">
+                <Zap className="h-6 w-6 text-interview-warning" />
+              </div>
+              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground mb-1">
+              Practice Mode
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              Quick warm-up without recording
             </p>
           </button>
 
@@ -176,7 +194,43 @@ export const Dashboard = () => {
               View History
             </h3>
             <p className="text-muted-foreground text-sm">
-              Review past interviews and track your progress
+              Review past interviews
+            </p>
+          </button>
+
+          <button
+            onClick={() => navigate("/analytics")}
+            className="group bg-card border border-border p-6 rounded-2xl text-left hover:shadow-lg transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <BarChart3 className="h-6 w-6 text-primary" />
+              </div>
+              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground mb-1">
+              Analytics
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              Track performance trends
+            </p>
+          </button>
+
+          <button
+            onClick={() => navigate("/leaderboard")}
+            className="group bg-card border border-border p-6 rounded-2xl text-left hover:shadow-lg transition-all duration-300"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-interview-success/20 flex items-center justify-center">
+                <Trophy className="h-6 w-6 text-interview-success" />
+              </div>
+              <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground mb-1">
+              Leaderboard
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              Compare your ranking
             </p>
           </button>
         </div>

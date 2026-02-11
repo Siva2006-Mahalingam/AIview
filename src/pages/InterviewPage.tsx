@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmotionCapture } from "@/components/EmotionCapture";
+import { CameraPreview, CameraPreviewRef } from "@/components/CameraPreview";
 import { SystemCheck } from "@/components/SystemCheck";
 import { useAntiCheat } from "@/hooks/useAntiCheat";
 import { useVideoRecorder } from "@/hooks/useVideoRecorder";
@@ -59,7 +59,8 @@ export const InterviewPage = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingTranscript = useRef("");
   const startTimeRef = useRef(Date.now());
-  const qaRef = useRef<{ question: string; answer: string; number: number }[]>([]);
+  const qaRef = useRef<{ question: string; answer: string; number: number; videoUrl?: string }[]>([]);
+  const cameraRef = useRef<CameraPreviewRef>(null);
 
   // Get user ID on mount
   useEffect(() => {
@@ -83,11 +84,59 @@ export const InterviewPage = () => {
     },
   });
 
-  // Video recorder (optional - can be enabled per question)
+  // Video recorder (records each answer and stores a path per question)
   const videoRecorder = useVideoRecorder({
     sessionId: sessionId || "",
     userId: userId || "",
   });
+
+  const startRecordingForQuestion = useCallback(
+    (questionNumber: number) => {
+      if (!cameraEnabled || !userId) return;
+
+      const attempt = (retries: number) => {
+        const stream = cameraRef.current?.getStream();
+        if (stream) {
+          videoRecorder.startRecording(questionNumber, stream);
+          return;
+        }
+        if (retries > 0) {
+          setTimeout(() => attempt(retries - 1), 300);
+        }
+      };
+
+      attempt(10);
+    },
+    [cameraEnabled, userId, videoRecorder]
+  );
+
+  const stopAndSaveRecording = useCallback(
+    async (questionNumber: number) => {
+      if (!videoRecorder.isRecording) return;
+
+      const videoRef = await videoRecorder.stopRecording();
+      if (!videoRef) return;
+
+      // Save storage path into the question row
+      await supabase
+        .from("interview_questions")
+        .update({ video_url: videoRef })
+        .eq("session_id", sessionId)
+        .eq("question_number", questionNumber);
+
+      const lastQa = qaRef.current[qaRef.current.length - 1];
+      if (lastQa?.number === questionNumber) {
+        lastQa.videoUrl = videoRef;
+      }
+    },
+    [sessionId, videoRecorder]
+  );
+
+  useEffect(() => {
+    if (!cameraEnabled || !userId) {
+      videoRecorder.cancelRecording();
+    }
+  }, [cameraEnabled, userId, videoRecorder]);
 
   // Track interview duration
   useEffect(() => {
@@ -142,6 +191,7 @@ export const InterviewPage = () => {
   // Speech-to-text
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
+    languageCode: "en",
     commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data) => {
       pendingTranscript.current = data.text;
@@ -167,6 +217,7 @@ export const InterviewPage = () => {
 
       await scribe.connect({
         token: data.token,
+        languageCode: "en",
         microphone: { echoCancellation: true, noiseSuppression: true },
       });
 
@@ -191,6 +242,29 @@ export const InterviewPage = () => {
       }, 300);
     }
   }, [scribe, input]);
+
+  // Ensure we always release devices on unmount (route change, refresh, etc.)
+  useEffect(() => {
+    return () => {
+      try {
+        scribe.disconnect();
+      } catch {
+        // ignore
+      }
+
+      try {
+        videoRecorder.cancelRecording();
+      } catch {
+        // ignore
+      }
+
+      cameraRef.current
+        ?.getStream()
+        ?.getTracks()
+        .forEach((t) => t.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle emotion capture
   const handleEmotionCaptured = (emotions: EmotionData) => {
@@ -291,6 +365,9 @@ export const InterviewPage = () => {
             question: fullResponse,
           });
           qaRef.current.push({ question: fullResponse, answer: "", number: 1 });
+
+          // Start recording the answer for Q1
+          startRecordingForQuestion(1);
         }
 
         if (voiceEnabled && fullResponse) await speakText(fullResponse);
@@ -312,6 +389,12 @@ export const InterviewPage = () => {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
+
+    // Stop and save video for the previous question
+    const lastQuestionNumber = qaRef.current[qaRef.current.length - 1]?.number;
+    if (lastQuestionNumber) {
+      await stopAndSaveRecording(lastQuestionNumber);
+    }
 
     // Save user's answer to previous question
     if (qaRef.current.length > 0) {
@@ -346,12 +429,17 @@ export const InterviewPage = () => {
 
       // Store new question
       if (sessionId && fullResponse) {
+        const nextQuestionNumber = questionCount + 1;
+
         await supabase.from("interview_questions").insert({
           session_id: sessionId,
-          question_number: questionCount + 1,
+          question_number: nextQuestionNumber,
           question: fullResponse,
         });
-        qaRef.current.push({ question: fullResponse, answer: "", number: questionCount + 1 });
+        qaRef.current.push({ question: fullResponse, answer: "", number: nextQuestionNumber });
+
+        // Start recording the answer for the new question
+        startRecordingForQuestion(nextQuestionNumber);
       }
 
       if (voiceEnabled && fullResponse) await speakText(fullResponse);
@@ -372,20 +460,39 @@ export const InterviewPage = () => {
   };
 
   const handleEndInterview = async () => {
-    // Exit fullscreen if active
-    if (document.fullscreenElement) {
-      await document.exitFullscreen().catch(() => {});
+    try {
+      // Stop listening (microphone)
+      scribe.disconnect();
+      setIsListening(false);
+
+      // Stop and save any in-progress recording
+      const lastQuestionNumber = qaRef.current[qaRef.current.length - 1]?.number;
+      if (lastQuestionNumber) {
+        await stopAndSaveRecording(lastQuestionNumber);
+      }
+      videoRecorder.cancelRecording();
+
+      // Hard-stop camera tracks
+      cameraRef.current
+        ?.getStream()
+        ?.getTracks()
+        .forEach((t) => t.stop());
+
+      // Exit fullscreen if active
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {});
+      }
+    } finally {
+      // Navigate to results with Q&A data
+      navigate(`/results/${sessionId}`, {
+        state: {
+          qaData: qaRef.current,
+          interviewType: state?.interviewType,
+          role: state?.role,
+          duration: interviewDuration,
+        },
+      });
     }
-    
-    // Navigate to results with Q&A data
-    navigate(`/results/${sessionId}`, {
-      state: {
-        qaData: qaRef.current,
-        interviewType: state?.interviewType,
-        role: state?.role,
-        duration: interviewDuration,
-      },
-    });
   };
 
   const formatTime = (seconds: number) => {
@@ -411,11 +518,11 @@ export const InterviewPage = () => {
         {/* Camera View */}
         <div className="p-4">
           <div className="aspect-video rounded-xl overflow-hidden bg-secondary mb-4">
-            {cameraEnabled && userId && sessionId ? (
-              <EmotionCapture
+            {cameraEnabled && sessionId ? (
+              <CameraPreview
+                ref={cameraRef}
                 sessionId={sessionId}
-                userId={userId}
-                isActive={!isInitializing}
+                isActive={cameraEnabled}
                 captureInterval={120000}
                 onEmotionCaptured={handleEmotionCaptured}
               />

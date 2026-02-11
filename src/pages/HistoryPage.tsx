@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { QuestionVideoDialog } from "@/components/history/QuestionVideoDialog";
+import { VideoThumbnail } from "@/components/history/VideoThumbnail";
 import {
   ArrowLeft,
   Loader2,
@@ -9,7 +11,6 @@ import {
   Trophy,
   Target,
   ChevronRight,
-  Play,
   MessageSquare,
 } from "lucide-react";
 
@@ -266,7 +267,20 @@ export const HistoryPage = () => {
                         {sessionQuestions[session.id]?.map((q) => (
                           <div key={q.id} className="bg-card rounded-xl p-4 border border-border">
                             <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1">
+                              {/* Video Thumbnail */}
+                              {q.video_url && (
+                                <QuestionVideoDialog
+                                  videoRef={q.video_url}
+                                  title={`Question ${q.question_number} – Answer video`}
+                                  trigger={
+                                    <VideoThumbnail
+                                      videoRef={q.video_url}
+                                    />
+                                  }
+                                />
+                              )}
+
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className={`text-sm font-medium px-2 py-0.5 rounded ${
                                     q.score ? (q.score >= 70 ? "bg-interview-success/20 text-interview-success" : "bg-interview-warning/20 text-interview-warning") : "bg-secondary text-muted-foreground"
@@ -274,32 +288,29 @@ export const HistoryPage = () => {
                                     Q{q.question_number} {q.score ? `• ${q.score}%` : ""}
                                   </span>
                                 </div>
-                                <p className="font-medium text-foreground text-sm mb-2">
+                                <p className="font-medium text-foreground text-sm mb-2 line-clamp-1">
                                   {q.question}
                                 </p>
                                 {q.answer && (
                                   <p className="text-sm text-muted-foreground line-clamp-2">
-                                    <span className="font-medium text-foreground">Answer: </span>
                                     {q.answer}
                                   </p>
                                 )}
                                 {q.feedback && (
-                                  <p className="text-xs text-muted-foreground mt-2 italic line-clamp-2">
+                                  <p className="text-xs text-muted-foreground mt-2 italic line-clamp-1">
                                     {q.feedback}
                                   </p>
                                 )}
                               </div>
 
-                              {/* Video playback */}
+                              {/* Play button (fallback for no thumbnail) */}
                               {q.video_url && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => window.open(q.video_url!, "_blank")}
-                                >
-                                  <Play className="h-4 w-4 mr-1" />
-                                  Video
-                                </Button>
+                                <div className="hidden">
+                                  <QuestionVideoDialog
+                                    videoRef={q.video_url}
+                                    title={`Question ${q.question_number} – Answer video`}
+                                  />
+                                </div>
                               )}
                             </div>
                           </div>
