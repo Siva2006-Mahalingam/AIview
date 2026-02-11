@@ -18,5 +18,8 @@ verify_jwt = false
 [functions.generate-feedback]
 verify_jwt = false
 
+[functions.interview-coach]
+verify_jwt = false
+
 [functions.health]
 verify_jwt = false

@@ -20,7 +20,6 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -30,58 +29,39 @@ serve(async (req) => {
       .download(filePath);
 
     if (downloadError || !fileData) {
-      throw new Error("Failed to download file: " + downloadError?.message);
+      throw new Error("Failed to download file: " + (downloadError?.message || "Unknown error"));
     }
 
-    // Convert file to base64
-    const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-    // Determine MIME type
+    // Get file extension
     const ext = filePath.split(".").pop()?.toLowerCase();
-    let mimeType = "application/pdf";
-    if (ext === "doc" || ext === "docx") {
-      mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    let extractedText = "";
+
+    // For text-based files, extract text directly
+    if (ext === "txt" || ext === "md") {
+      extractedText = await fileData.text();
+    } else {
+      // For PDF and other files, try to extract text content
+      // Note: Full PDF parsing requires a dedicated library
+      // For now, we'll try to read as text and clean up
+      try {
+        const rawText = await fileData.text();
+        // Basic cleanup for PDF text extraction
+        extractedText = rawText
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove control characters
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim();
+        
+        // If extracted text is too short or looks like binary, provide a fallback message
+        if (extractedText.length < 50 || /^%PDF/.test(extractedText)) {
+          extractedText = `Resume file uploaded: ${filePath}. File type: ${ext?.toUpperCase() || 'Unknown'}. Please review the resume content manually or provide resume details in text format for AI analysis.`;
+        }
+      } catch {
+        extractedText = `Resume file uploaded: ${filePath}. Unable to extract text from this file format. Please provide resume details in text format for better AI analysis.`;
+      }
     }
 
-    // Use AI to extract text (OCR-like functionality)
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Extract ALL text content from this resume document. Return ONLY the extracted text, preserving the structure (sections, bullet points, etc.). Do not add any commentary or formatting instructions. Just the raw text content.`,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType};base64,${base64}`,
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 4096,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI API error:", errorText);
-      throw new Error("Failed to extract text from resume");
-    }
-
-    const result = await response.json();
-    const extractedText = result.choices?.[0]?.message?.content || "";
+    console.log("Extracted text length:", extractedText.length);
 
     return new Response(
       JSON.stringify({ text: extractedText }),

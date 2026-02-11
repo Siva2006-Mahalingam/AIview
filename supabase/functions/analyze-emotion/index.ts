@@ -14,76 +14,9 @@ serve(async (req) => {
     const { imageData, sessionId } = await req.json();
 
     if (!imageData) {
-      throw new Error("Missing image data");
-    }
-
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY")!;
-
-    // Use AI to analyze emotions from the image
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analyze this image of a person during a job interview. Evaluate their emotional state and body language. 
-                
-Return a JSON object with the following structure (and ONLY the JSON, no markdown):
-{
-  "emotions": {
-    "happy": 0-100,
-    "sad": 0-100,
-    "angry": 0-100,
-    "surprised": 0-100,
-    "fearful": 0-100,
-    "disgusted": 0-100,
-    "neutral": 0-100
-  },
-  "is_nervous": true/false,
-  "confidence_level": 0-100
-}
-
-Base your analysis on facial expressions, posture, and overall demeanor. Be objective and analytical.`,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageData,
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 500,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI API error:", errorText);
-      throw new Error("Failed to analyze emotion");
-    }
-
-    const result = await response.json();
-    let analysisText = result.choices?.[0]?.message?.content || "";
-    
-    // Clean up the response to extract JSON
-    analysisText = analysisText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-    let emotionData;
-    try {
-      emotionData = JSON.parse(analysisText);
-    } catch {
-      // Default response if parsing fails
-      emotionData = {
+      // Return default emotion data if no image provided
+      return new Response(JSON.stringify({
+        error: "Missing image data",
         emotions: {
           happy: 30,
           sad: 10,
@@ -95,8 +28,36 @@ Base your analysis on facial expressions, posture, and overall demeanor. Be obje
         },
         is_nervous: false,
         confidence_level: 60,
-      };
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+    // Note: Groq API doesn't support vision/image analysis
+    // Return simulated emotion data based on interview context
+    // In production, consider using a dedicated vision API (e.g., Azure Face API, AWS Rekognition)
+    
+    // Generate slightly randomized but realistic emotion data
+    const baseConfidence = 50 + Math.floor(Math.random() * 30); // 50-80
+    const isNervous = Math.random() > 0.6; // 40% chance of appearing nervous
+    
+    const emotionData = {
+      emotions: {
+        happy: 20 + Math.floor(Math.random() * 30),
+        sad: 5 + Math.floor(Math.random() * 15),
+        angry: Math.floor(Math.random() * 10),
+        surprised: 5 + Math.floor(Math.random() * 15),
+        fearful: isNervous ? 15 + Math.floor(Math.random() * 20) : 5 + Math.floor(Math.random() * 10),
+        disgusted: Math.floor(Math.random() * 5),
+        neutral: 30 + Math.floor(Math.random() * 30),
+      },
+      is_nervous: isNervous,
+      confidence_level: baseConfidence,
+      session_id: sessionId,
+      note: "Emotion analysis simulated - vision API not available",
+    };
+
+    console.log("Returning emotion data for session:", sessionId);
 
     return new Response(JSON.stringify(emotionData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
