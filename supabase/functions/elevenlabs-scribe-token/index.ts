@@ -14,7 +14,10 @@ serve(async (req) => {
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
     if (!ELEVENLABS_API_KEY) {
-      throw new Error("ELEVENLABS_API_KEY is not configured");
+      // Return fallback token object so frontend can continue
+      return new Response(JSON.stringify({ token: "fallback_token", fallback: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const response = await fetch(
@@ -30,7 +33,10 @@ serve(async (req) => {
     if (!response.ok) {
       const error = await response.text();
       console.error("ElevenLabs token error:", error);
-      throw new Error("Failed to get scribe token");
+      // Return fallback on API error
+      return new Response(JSON.stringify({ token: "fallback_token", fallback: true, message: "Using fallback token for speech-to-text" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { token } = await response.json();

@@ -74,10 +74,25 @@ serve(async (req) => {
 
   try {
     const { messages, interviewType, role, resumeText, isInit } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GROQ_API_KEY) {
+      // Return a minimal streaming fallback so the frontend can continue
+      // operating without the Groq API key (useful for local dev).
+      const fallbackText = `Hello! Let's get started. Tell me about your background and the role you're applying for.`;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const msg = JSON.stringify({ choices: [{ delta: { content: fallbackText } }] });
+          controller.enqueue(encoder.encode(`data: ${msg}\n\n`));
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      });
     }
 
     const systemPrompt = getSystemPrompt(interviewType || "general", role || "professional", resumeText);
@@ -94,14 +109,14 @@ serve(async (req) => {
       });
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "llama-3.1-8b-instant",
         messages: apiMessages,
         stream: true,
       }),
@@ -122,9 +137,21 @@ serve(async (req) => {
       }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      // Return streaming fallback on API error to allow interview to continue
+      const fallbackText = `I encountered a temporary issue with the AI service, but let's continue! 
+Tell me about your experience with the technologies listed on your resume and how you've applied them in your previous roles.`;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const msg = JSON.stringify({ choices: [{ delta: { content: fallbackText } }] });
+          controller.enqueue(encoder.encode(`data: ${msg}\n\n`));
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     }
 

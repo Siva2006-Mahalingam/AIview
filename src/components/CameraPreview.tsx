@@ -59,12 +59,15 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
         streamRef.current = stream;
 
         if (videoRef.current) {
-          // Cancel any pending play requests
-          videoRef.current.pause();
-          videoRef.current.srcObject = stream;
-          
-          // Use play with catch for AbortError
+          // Only set srcObject if it's different to avoid re-attaching the stream
+          // which can cause a visible blink/flash in some browsers.
+          if (videoRef.current.srcObject !== stream) {
+            videoRef.current.srcObject = stream;
+          }
+
+          // Ensure element is muted (helps with autoplay policies) and play.
           try {
+            videoRef.current.muted = true;
             await videoRef.current.play();
           } catch (playError) {
             if ((playError as Error).name !== 'AbortError') {
@@ -90,6 +93,10 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       }
 
       if (streamRef.current) {
+        // Stop tracks but do not forcibly clear the video's srcObject.
+        // Leaving srcObject prevents a quick visual flash in some browsers
+        // by keeping the last rendered frame visible instead of reattaching
+        // a null src and causing a blink when starting again.
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }

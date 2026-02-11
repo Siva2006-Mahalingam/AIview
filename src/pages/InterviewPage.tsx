@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
+import EnvHealthBanner from "@/components/EnvHealthBanner";
 
 interface Message {
   role: "user" | "assistant";
@@ -173,6 +174,14 @@ export const InterviewPage = () => {
       if (!response.ok) throw new Error("TTS failed");
 
       const data = await response.json();
+      // If the TTS function returned a fallback or error, don't attempt to play audio
+      if (data?.fallback || data?.error) {
+        // fallback: show the text visually instead of speaking
+        toast.info(data?.message || "Voice synthesis unavailable — showing text instead.");
+        setIsSpeaking(false);
+        return;
+      }
+
       const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
 
       if (audioRef.current) audioRef.current.pause();
@@ -659,6 +668,9 @@ export const InterviewPage = () => {
             </div>
           </div>
         </header>
+
+        {/* Show environment health (missing API keys) */}
+        <EnvHealthBanner />
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6">

@@ -36,8 +36,34 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
     setIsExporting(true);
 
     try {
-      // Dynamically import html2pdf to avoid SSR issues
-      const html2pdf = (await import("html2pdf.js")).default;
+      // Load html2pdf at runtime. Use existing global if present, otherwise
+      // load the bundled script from jsDelivr to avoid Vite import resolution errors.
+      const loadHtml2Pdf = async () => {
+        const win = window as any;
+        if (win && win.html2pdf) return win.html2pdf;
+
+        // Fallback: inject CDN script
+        await new Promise<void>((resolve, reject) => {
+          const existing = document.querySelector('script[data-html2pdf]');
+          if (existing) {
+            existing.addEventListener('load', () => resolve());
+            existing.addEventListener('error', () => reject(new Error('Failed to load html2pdf from CDN')));
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.setAttribute('data-html2pdf', 'true');
+          script.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js';
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Failed to load html2pdf from CDN'));
+          document.head.appendChild(script);
+        });
+
+        return (window as any).html2pdf;
+      };
+
+      const html2pdf = await loadHtml2Pdf();
 
       // Create a hidden container for the PDF content
       const container = document.createElement("div");
