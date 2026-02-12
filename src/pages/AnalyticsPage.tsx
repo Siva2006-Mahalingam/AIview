@@ -56,22 +56,31 @@ export const AnalyticsPage = () => {
         return;
       }
 
-      const [sessionsRes, questionsRes] = await Promise.all([
-        supabase
-          .from("interview_sessions")
-          .select("id, performance_percentage, ats_score, interview_type, started_at, ended_at")
-          .eq("user_id", user.id)
-          .eq("status", "completed")
-          .order("started_at", { ascending: true }),
-        supabase
-          .from("interview_questions")
-          .select("id, score, question, feedback, session_id")
-          .order("created_at", { ascending: false })
-          .limit(100),
-      ]);
+      // First fetch user's completed sessions
+      const sessionsRes = await supabase
+        .from("interview_sessions")
+        .select("id, performance_percentage, ats_score, interview_type, started_at, ended_at")
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .order("started_at", { ascending: true });
 
-      if (sessionsRes.data) setSessions(sessionsRes.data);
-      if (questionsRes.data) setQuestions(questionsRes.data);
+      if (sessionsRes.data) {
+        setSessions(sessionsRes.data);
+
+        // Then fetch questions only from user's sessions
+        if (sessionsRes.data.length > 0) {
+          const sessionIds = sessionsRes.data.map(s => s.id);
+          const questionsRes = await supabase
+            .from("interview_questions")
+            .select("id, score, question, feedback, session_id")
+            .in("session_id", sessionIds)
+            .order("created_at", { ascending: false })
+            .limit(100);
+
+          if (questionsRes.data) setQuestions(questionsRes.data);
+        }
+      }
+
       setIsLoading(false);
     };
 

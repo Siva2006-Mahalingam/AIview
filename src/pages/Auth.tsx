@@ -22,6 +22,9 @@ export const Auth = () => {
     e.preventDefault();
     setIsLoading(true);
 
+    // Use VITE_APP_URL for production, fallback to current origin
+    const redirectUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -29,7 +32,7 @@ export const Auth = () => {
           password,
           options: {
             data: { full_name: fullName },
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${redirectUrl}/auth`,
           },
         });
 

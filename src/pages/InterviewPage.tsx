@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Mic, MicOff, Send, User, Volume2, VolumeX, Video, VideoOff, Clock, AlertCircle, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CameraPreview, CameraPreviewRef } from "@/components/CameraPreview";
 import { SystemCheck } from "@/components/SystemCheck";
@@ -10,6 +10,17 @@ import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import EnvHealthBanner from "@/components/EnvHealthBanner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -79,6 +90,9 @@ export const InterviewPage = () => {
   const qaRef = useRef<{ question: string; answer: string; number: number; videoUrl?: string }[]>([]);
   const cameraRef = useRef<CameraPreviewRef>(null);
   const recognitionRef = useRef<any>(null);
+  const isMobile = useIsMobile();
+  const [showMobileCamera, setShowMobileCamera] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Get user ID on mount
   useEffect(() => {
@@ -645,9 +659,81 @@ export const InterviewPage = () => {
   }
 
   return (
-    <div className="flex h-screen bg-interview-bg">
-      {/* Sidebar with camera */}
-      <div className="w-80 border-r border-border bg-card flex flex-col">
+    <div className="flex flex-col md:flex-row h-screen bg-interview-bg">
+      {/* Mobile Camera Toggle */}
+      {isMobile && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleEndInterview} className="p-1">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium truncate max-w-[120px]">
+                {state?.interviewType} - {state?.role}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {formatTime(interviewDuration)}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1"
+                onClick={() => setShowMobileCamera(!showMobileCamera)}
+              >
+                {showMobileCamera ? <ChevronUp className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1"
+                onClick={() => {
+                  if (isSpeaking) {
+                    window.speechSynthesis.cancel();
+                    setIsSpeaking(false);
+                  }
+                  setVoiceEnabled(!voiceEnabled);
+                }}
+              >
+                {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+          {/* Mobile Camera Dropdown */}
+          {showMobileCamera && (
+            <div className="px-3 pb-3">
+              <div className="aspect-video rounded-lg overflow-hidden bg-secondary max-h-32">
+                {cameraEnabled && sessionId ? (
+                  <CameraPreview
+                    ref={cameraRef}
+                    sessionId={sessionId}
+                    isActive={cameraEnabled}
+                    captureInterval={120000}
+                    onEmotionCaptured={handleEmotionCaptured}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <VideoOff className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <Button
+                variant={cameraEnabled ? "outline" : "secondary"}
+                size="sm"
+                className="w-full mt-2 h-8 text-xs"
+                onClick={() => setCameraEnabled(!cameraEnabled)}
+              >
+                {cameraEnabled ? "Camera On" : "Camera Off"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Desktop Sidebar with camera */}
+      <div className="hidden md:flex w-80 border-r border-border bg-card flex-col">
         {/* Camera View */}
         <div className="p-4">
           <div className="aspect-video rounded-xl overflow-hidden bg-secondary mb-4">
@@ -743,16 +829,16 @@ export const InterviewPage = () => {
 
         {/* End Button */}
         <div className="p-4 border-t border-border">
-          <Button variant="destructive" className="w-full" onClick={handleEndInterview}>
+          <Button variant="destructive" className="w-full" onClick={() => setShowEndConfirm(true)}>
             End Interview
           </Button>
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="border-b border-border bg-card px-4 py-3">
+      <div className={`flex-1 flex flex-col ${isMobile ? 'pt-12' : ''}`}>
+        {/* Header - desktop only */}
+        <header className="hidden md:block border-b border-border bg-card px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" onClick={handleEndInterview}>
@@ -797,8 +883,8 @@ export const InterviewPage = () => {
         <EnvHealthBanner />
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-3xl mx-auto space-y-6">
+        <div className={`flex-1 overflow-y-auto px-3 md:px-4 py-4 md:py-6 ${isMobile && showMobileCamera ? 'pt-2' : ''}`}>
+          <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
             {isInitializing && messages.length === 0 && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
@@ -822,7 +908,7 @@ export const InterviewPage = () => {
                 )}
 
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                  className={`max-w-[85%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2 md:py-3 ${
                     message.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-card border border-border shadow-sm"
@@ -870,17 +956,17 @@ export const InterviewPage = () => {
         </div>
 
         {/* Input */}
-        <div className="border-t border-border bg-card px-4 py-4">
+        <div className="border-t border-border bg-card px-3 md:px-4 py-3 md:py-4">
           <div className="max-w-3xl mx-auto">
-            <div className="flex items-end gap-3">
+            <div className="flex items-end gap-2 md:gap-3">
               <Button
                 variant={isListening ? "destructive" : "outline"}
                 size="icon"
                 onClick={isListening ? stopListening : startListening}
                 disabled={isLoading || isInitializing || isSpeaking}
-                className={`h-12 w-12 rounded-xl shrink-0 ${isListening ? "animate-pulse" : ""}`}
+                className={`h-10 w-10 md:h-12 md:w-12 rounded-xl shrink-0 ${isListening ? "animate-pulse" : ""}`}
               >
-                {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                {isListening ? <MicOff className="h-4 w-4 md:h-5 md:w-5" /> : <Mic className="h-4 w-4 md:h-5 md:w-5" />}
               </Button>
 
               <div className="relative flex-1">
@@ -889,10 +975,10 @@ export const InterviewPage = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={isListening ? "Listening..." : "Type or speak your answer..."}
+                  placeholder={isListening ? "Listening..." : isMobile ? "Type or tap mic..." : "Type or speak your answer..."}
                   rows={1}
-                  className="w-full resize-none rounded-xl border border-input bg-background px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  style={{ maxHeight: "150px" }}
+                  className="w-full resize-none rounded-xl border border-input bg-background px-3 md:px-4 py-2 md:py-3 pr-10 md:pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  style={{ maxHeight: "120px" }}
                   disabled={isLoading || isInitializing || isListening}
                 />
               </div>
@@ -903,17 +989,52 @@ export const InterviewPage = () => {
                 size="icon"
                 onClick={sendMessage}
                 disabled={!input.trim() || isLoading || isInitializing}
-                className="h-12 w-12 rounded-xl shrink-0"
+                className="h-10 w-10 md:h-12 md:w-12 rounded-xl shrink-0"
               >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                {isLoading ? <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" /> : <Send className="h-4 w-4 md:h-5 md:w-5" />}
               </Button>
             </div>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              🎤 Click mic to speak • Enter to send • AI will respond with voice
-            </p>
+            {isMobile ? (
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-[10px] text-muted-foreground">
+                  🎤 Tap mic to speak
+                </p>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 text-xs px-3"
+                  onClick={() => setShowEndConfirm(true)}
+                >
+                  End
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                🎤 Click mic to speak • Enter to send • AI will respond with voice
+              </p>
+            )}
           </div>
         </div>
       </div>
+
+      {/* End Interview Confirmation Dialog */}
+      <AlertDialog open={showEndConfirm} onOpenChange={setShowEndConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Interview?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to end this interview? You've answered {questionCount} question{questionCount !== 1 ? 's' : ''}.
+              Your responses will be saved and you'll receive feedback.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Interview</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEndInterview} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              End Interview
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

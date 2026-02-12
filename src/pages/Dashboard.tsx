@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2, BarChart3, Trophy, Zap } from "lucide-react";
+import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2, BarChart3, Trophy, Zap, Shield } from "lucide-react";
+
+// Admin email allowlist
+const ADMIN_EMAILS = ["231001203@rajalakshmi.edu.in"];
 
 interface Profile {
   id: string;
@@ -117,6 +120,12 @@ export const Dashboard = () => {
             <span className="font-semibold text-foreground">InterviewAI</span>
           </div>
           <div className="flex items-center gap-4">
+            {profile?.email && ADMIN_EMAILS.includes(profile.email) && (
+              <Button variant="outline" size="sm" onClick={() => navigate("/admin")}>
+                <Shield className="h-4 w-4 mr-2" />
+                Admin
+              </Button>
+            )}
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">

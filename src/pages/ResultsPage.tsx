@@ -59,6 +59,25 @@ export const ResultsPage = () => {
         return;
       }
 
+      // Verify user owns this session
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+
+      const { data: sessionCheck } = await supabase
+        .from("interview_sessions")
+        .select("id, user_id")
+        .eq("id", sessionId)
+        .single();
+
+      if (!sessionCheck || sessionCheck.user_id !== user.id) {
+        toast.error("Session not found or access denied");
+        navigate("/dashboard");
+        return;
+      }
+
       setIsGenerating(true);
 
       try {

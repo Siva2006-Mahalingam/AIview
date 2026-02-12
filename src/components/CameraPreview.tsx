@@ -38,6 +38,9 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
     const onEmotionCapturedRef = useRef(onEmotionCaptured);
     onEmotionCapturedRef.current = onEmotionCaptured;
 
+    // Detect mobile for camera constraints
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     // Expose stream getter to parent
     useImperativeHandle(ref, () => ({
       getStream: () => streamRef.current,
@@ -48,10 +51,14 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       isInitializedRef.current = true;
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: 1280, height: 720 },
+        // Mobile-friendly constraints - lower resolution for better performance
+        const constraints = {
+          video: isMobile
+            ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
+            : { facingMode: "user", width: 1280, height: 720 },
           audio: true,
-        });
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
         // Check if component is still active before setting stream
         if (!isInitializedRef.current) {

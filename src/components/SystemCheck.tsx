@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, Mic, Monitor, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Camera, Mic, Monitor, CheckCircle, XCircle, Loader2, AlertTriangle, Smartphone } from "lucide-react";
+
+// Detect if user is on mobile device
+const isMobileDevice = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+};
 
 interface SystemCheckProps {
   onComplete: () => void;
@@ -10,7 +16,7 @@ interface SystemCheckProps {
 interface CheckStatus {
   camera: "pending" | "checking" | "success" | "error";
   microphone: "pending" | "checking" | "success" | "error";
-  fullscreen: "pending" | "checking" | "success" | "error";
+  fullscreen: "pending" | "checking" | "success" | "error" | "skipped";
 }
 
 export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
@@ -21,23 +27,32 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
   });
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({});
   const [allPassed, setAllPassed] = useState(false);
+  const [isMobile] = useState(() => isMobileDevice());
 
   const checkCamera = useCallback(async () => {
     setStatus((prev) => ({ ...prev, camera: "checking" }));
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Mobile-friendly constraints
+      const constraints = {
+        video: isMobile
+          ? { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
+          : true,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       stream.getTracks().forEach((track) => track.stop());
       setStatus((prev) => ({ ...prev, camera: "success" }));
       return true;
-    } catch (error) {
+    } catch (error: any) {
       setStatus((prev) => ({ ...prev, camera: "error" }));
-      setErrorMessages((prev) => ({
-        ...prev,
-        camera: "Camera access denied. Please allow camera access in your browser settings.",
-      }));
+      const message = error.name === "NotAllowedError"
+        ? isMobile
+          ? "Tap 'Allow' when prompted. On iOS, check Safari settings."
+          : "Camera access denied. Please allow camera access."
+        : "Camera not available. Check device settings.";
+      setErrorMessages((prev) => ({ ...prev, camera: message }));
       return false;
     }
-  }, []);
+  }, [isMobile]);
 
   const checkMicrophone = useCallback(async () => {
     setStatus((prev) => ({ ...prev, microphone: "checking" }));
@@ -46,17 +61,25 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
       stream.getTracks().forEach((track) => track.stop());
       setStatus((prev) => ({ ...prev, microphone: "success" }));
       return true;
-    } catch (error) {
+    } catch (error: any) {
       setStatus((prev) => ({ ...prev, microphone: "error" }));
-      setErrorMessages((prev) => ({
-        ...prev,
-        microphone: "Microphone access denied. Please allow microphone access in your browser settings.",
-      }));
+      const message = error.name === "NotAllowedError"
+        ? isMobile
+          ? "Tap 'Allow' when prompted. On iOS, check Safari settings."
+          : "Microphone access denied. Please allow microphone access."
+        : "Microphone not available. Check device settings.";
+      setErrorMessages((prev) => ({ ...prev, microphone: message }));
       return false;
     }
-  }, []);
+  }, [isMobile]);
 
   const checkFullscreen = useCallback(async () => {
+    // Skip fullscreen check on mobile - not supported on iOS Safari
+    if (isMobile) {
+      setStatus((prev) => ({ ...prev, fullscreen: "skipped" }));
+      return true;
+    }
+
     setStatus((prev) => ({ ...prev, fullscreen: "checking" }));
     try {
       if (document.fullscreenEnabled) {
@@ -73,7 +96,7 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
       }));
       return false;
     }
-  }, []);
+  }, [isMobile]);
 
   const runAllChecks = useCallback(async () => {
     const results = await Promise.all([checkCamera(), checkMicrophone(), checkFullscreen()]);
@@ -85,16 +108,19 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
   }, [runAllChecks]);
 
   const retryCheck = async (check: keyof CheckStatus) => {
-    if (check === "camera") await checkCamera();
-    if (check === "microphone") await checkMicrophone();
-    if (check === "fullscreen") await checkFullscreen();
+    let result = false;
+    if (check === "camera") result = await checkCamera();
+    if (check === "microphone") result = await checkMicrophone();
+    if (check === "fullscreen") result = await checkFullscreen();
     
-    // Re-evaluate all passed
-    setAllPassed(
-      status.camera === "success" &&
-      status.microphone === "success" &&
-      status.fullscreen === "success"
-    );
+    // Re-evaluate all passed after state updates
+    setTimeout(() => {
+      setAllPassed(
+        (status.camera === "success" || (check === "camera" && result)) &&
+        (status.microphone === "success" || (check === "microphone" && result)) &&
+        (status.fullscreen === "success" || status.fullscreen === "skipped" || (check === "fullscreen" && result))
+      );
+    }, 100);
   };
 
   const getStatusIcon = (checkStatus: CheckStatus[keyof CheckStatus]) => {
@@ -105,12 +131,20 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
         return <Loader2 className="w-6 h-6 animate-spin text-primary" />;
       case "success":
         return <CheckCircle className="w-6 h-6 text-interview-success" />;
+      case "skipped":
+        return <CheckCircle className="w-6 h-6 text-muted-foreground" />;
       case "error":
         return <XCircle className="w-6 h-6 text-destructive" />;
     }
   };
 
   const handleStartInterview = async () => {
+    // Skip fullscreen on mobile
+    if (isMobile) {
+      onComplete();
+      return;
+    }
+
     try {
       await document.documentElement.requestFullscreen();
       onComplete();
@@ -131,6 +165,12 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
           <p className="text-muted-foreground text-sm">
             Please ensure all requirements are met before starting the interview.
           </p>
+          {isMobile && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-secondary/50 px-3 py-2 rounded-lg">
+              <Smartphone className="h-4 w-4" />
+              <span>Mobile detected - tap buttons below to grant permissions</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4 mb-8">
@@ -181,7 +221,12 @@ export const SystemCheck = ({ onComplete, onCancel }: SystemCheckProps) => {
             <div className="flex items-center gap-3">
               <Monitor className="h-5 w-5 text-foreground" />
               <div>
-                <p className="font-medium text-foreground">Fullscreen Support</p>
+                <p className="font-medium text-foreground">
+                  {isMobile ? "Fullscreen (Optional)" : "Fullscreen Support"}
+                </p>
+                {status.fullscreen === "skipped" && (
+                  <p className="text-xs text-muted-foreground">Skipped on mobile</p>
+                )}
                 {status.fullscreen === "error" && (
                   <p className="text-xs text-destructive">{errorMessages.fullscreen}</p>
                 )}

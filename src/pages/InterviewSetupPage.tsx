@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResumeUpload } from "@/components/ResumeUpload";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Loader2, Briefcase, Code, Users, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Briefcase, Code, Users, Sparkles, Lightbulb } from "lucide-react";
 
 const INTERVIEW_TYPES = [
   {
@@ -248,6 +248,22 @@ export const InterviewSetupPage = () => {
                     {suggestion}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Quick Tips */}
+            <div className="mt-6 bg-primary/5 border border-primary/20 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-foreground text-sm mb-2">Quick Tips for Success</h4>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>• Find a quiet place with good lighting</li>
+                    <li>• Speak clearly and at a moderate pace</li>
+                    <li>• Use the STAR method for behavioral questions</li>
+                    <li>• Take a moment to think before answering</li>
+                  </ul>
+                </div>
               </div>
             </div>
 
