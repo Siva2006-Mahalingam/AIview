@@ -8,9 +8,27 @@ import { useAntiCheat } from "@/hooks/useAntiCheat";
 import { useVideoRecorder } from "@/hooks/useVideoRecorder";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
-import { useScribe, CommitStrategy } from "@elevenlabs/react";
 import { supabase } from "@/integrations/supabase/client";
 import EnvHealthBanner from "@/components/EnvHealthBanner";
+
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: SpeechRecognitionAlternative;
+}
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -32,7 +50,6 @@ interface LocationState {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/interview-chat`;
-const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
 
 export const InterviewPage = () => {
   const { id: sessionId } = useParams<{ id: string }>();
@@ -57,11 +74,11 @@ export const InterviewPage = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingTranscript = useRef("");
   const startTimeRef = useRef(Date.now());
   const qaRef = useRef<{ question: string; answer: string; number: number; videoUrl?: string }[]>([]);
   const cameraRef = useRef<CameraPreviewRef>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Get user ID on mount
   useEffect(() => {
@@ -113,17 +130,28 @@ export const InterviewPage = () => {
 
   const stopAndSaveRecording = useCallback(
     async (questionNumber: number) => {
-      if (!videoRecorder.isRecording) return;
-
+      console.log("stopAndSaveRecording: attempting to stop recording for Q", questionNumber);
       const videoRef = await videoRecorder.stopRecording();
-      if (!videoRef) return;
+      
+      if (!videoRef) {
+        console.log("stopAndSaveRecording: no videoRef returned (was not recording or upload failed)");
+        return;
+      }
+
+      console.log("stopAndSaveRecording: video uploaded to", videoRef);
 
       // Save storage path into the question row
-      await supabase
+      const { error } = await supabase
         .from("interview_questions")
         .update({ video_url: videoRef })
         .eq("session_id", sessionId)
         .eq("question_number", questionNumber);
+
+      if (error) {
+        console.error("stopAndSaveRecording: failed to save video_url", error);
+      } else {
+        console.log("stopAndSaveRecording: video_url saved for Q", questionNumber);
+      }
 
       const lastQa = qaRef.current[qaRef.current.length - 1];
       if (lastQa?.number === questionNumber) {
@@ -156,107 +184,145 @@ export const InterviewPage = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Text-to-speech
-  const speakText = useCallback(async (text: string) => {
+  // Preload voices for Web Speech API (some browsers load them async)
+  useEffect(() => {
+    const loadVoices = () => {
+      window.speechSynthesis.getVoices();
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
+
+  // Text-to-speech using Web Speech API (free, built into browsers)
+  const speakText = useCallback((text: string) => {
     if (!voiceEnabled || !text.trim()) return;
 
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
     setIsSpeaking(true);
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Get available voices and prefer a natural-sounding English voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+      v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Natural'))
+    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    window.speechSynthesis.speak(utterance);
+  }, [voiceEnabled]);
+
+  // Speech-to-text using Web Speech API (free, built into browsers)
+  const startListening = useCallback(() => {
     try {
-      const response = await fetch(TTS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ text, voiceId: "JBFqnCBsd6RMkjVDRZzb" }),
-      });
+      // Stop any ongoing speech before listening
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
 
-      if (!response.ok) throw new Error("TTS failed");
-
-      const data = await response.json();
-      // If the TTS function returned a fallback or error, don't attempt to play audio
-      if (data?.fallback || data?.error) {
-        // fallback: show the text visually instead of speaking
-        toast.info(data?.message || "Voice synthesis unavailable — showing text instead.");
-        setIsSpeaking(false);
+      // Check browser support
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        toast.error("Speech recognition not supported in this browser");
         return;
       }
 
-      const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+      // Create recognition instance
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-      if (audioRef.current) audioRef.current.pause();
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
 
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
-      await audio.play();
-    } catch (error) {
-      console.error("TTS error:", error);
-      setIsSpeaking(false);
-    }
-  }, [voiceEnabled]);
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
 
-  // Speech-to-text
-  const scribe = useScribe({
-    modelId: "scribe_v2_realtime",
-    languageCode: "en",
-    commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data) => {
-      pendingTranscript.current = data.text;
-      setInput(data.text);
-    },
-    onCommittedTranscript: (data) => {
-      if (data.text.trim()) {
-        setInput(data.text);
-        pendingTranscript.current = "";
-      }
-    },
-  });
+        if (finalTranscript) {
+          setInput(prev => prev + finalTranscript);
+          pendingTranscript.current = '';
+        } else if (interimTranscript) {
+          pendingTranscript.current = interimTranscript;
+        }
+      };
 
-  const startListening = useCallback(async () => {
-    try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        setIsSpeaking(false);
-      }
+      recognition.onerror = (event: any) => {
+        console.warn("Speech recognition error:", event.error);
+        if (event.error !== 'no-speech') {
+          toast.error("Voice recognition error");
+        }
+        setIsListening(false);
+      };
 
-      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
-      if (error || !data?.token) throw new Error("Failed to get scribe token");
+      recognition.onend = () => {
+        // Only update state if we're still supposed to be listening
+        if (recognitionRef.current === recognition) {
+          setIsListening(false);
+        }
+      };
 
-      await scribe.connect({
-        token: data.token,
-        languageCode: "en",
-        microphone: { echoCancellation: true, noiseSuppression: true },
-      });
-
+      recognitionRef.current = recognition;
+      recognition.start();
       setIsListening(true);
       toast.success("Listening... Speak now!");
     } catch (error) {
       console.error("STT error:", error);
       toast.error("Failed to start voice input");
     }
-  }, [scribe]);
+  }, []);
 
   const stopListening = useCallback(() => {
-    scribe.disconnect();
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    } catch {
+      // Ignore stop errors
+    }
     setIsListening(false);
 
     const transcript = input.trim() || pendingTranscript.current.trim();
     if (transcript) {
       setInput(transcript);
+      pendingTranscript.current = '';
       setTimeout(() => {
         const sendBtn = document.getElementById("send-btn");
         if (sendBtn) sendBtn.click();
       }, 300);
     }
-  }, [scribe, input]);
+  }, [input]);
 
   // Ensure we always release devices on unmount (route change, refresh, etc.)
   useEffect(() => {
     return () => {
       try {
-        scribe.disconnect();
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        }
       } catch {
         // ignore
       }
@@ -275,62 +341,69 @@ export const InterviewPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle emotion capture
-  const handleEmotionCaptured = (emotions: EmotionData) => {
+  // Handle emotion capture - wrapped in useCallback to prevent camera re-render
+  const handleEmotionCaptured = useCallback((emotions: EmotionData) => {
     setCurrentEmotions(emotions);
-  };
+  }, []);
 
   // Stream AI response
-  const streamResponse = async (response: Response): Promise<string> => {
+  const streamResponse = async (response: Response, questionNumber: number): Promise<string> => {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let textBuffer = "";
     let assistantContent = "";
-    const newQuestionNumber = questionCount + 1;
 
-    setMessages((prev) => [...prev, { role: "assistant", content: "", questionNumber: newQuestionNumber }]);
+    setMessages((prev) => [...prev, { role: "assistant", content: "", questionNumber: questionNumber }]);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      textBuffer += decoder.decode(value, { stream: true });
+        textBuffer += decoder.decode(value, { stream: true });
 
-      let newlineIndex: number;
-      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-        let line = textBuffer.slice(0, newlineIndex);
-        textBuffer = textBuffer.slice(newlineIndex + 1);
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
 
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (line.startsWith(":") || line.trim() === "") continue;
-        if (!line.startsWith("data: ")) continue;
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
 
-        const jsonStr = line.slice(6).trim();
-        if (jsonStr === "[DONE]") break;
-
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            assistantContent += content;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = {
-                role: "assistant",
-                content: assistantContent,
-                questionNumber: newQuestionNumber,
-              };
-              return updated;
-            });
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") {
+            setQuestionCount(questionNumber);
+            return assistantContent;
           }
-        } catch {
-          textBuffer = line + "\n" + textBuffer;
-          break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: assistantContent,
+                  questionNumber: questionNumber,
+                };
+                return updated;
+              });
+            }
+          } catch (parseError) {
+            // Log but continue - might be incomplete JSON chunk
+            console.warn("JSON parse warning:", parseError);
+            continue;
+          }
         }
       }
+    } catch (streamError) {
+      console.error("Stream error:", streamError);
     }
 
-    setQuestionCount(newQuestionNumber);
+    setQuestionCount(questionNumber);
     return assistantContent;
   };
 
@@ -364,7 +437,7 @@ export const InterviewPage = () => {
 
         if (!response.ok || !response.body) throw new Error("Failed to start interview");
 
-        const fullResponse = await streamResponse(response);
+        const fullResponse = await streamResponse(response, 1);
 
         // Store question
         if (sessionId && fullResponse) {
@@ -410,14 +483,27 @@ export const InterviewPage = () => {
       const lastQa = qaRef.current[qaRef.current.length - 1];
       lastQa.answer = userMessage;
 
-      await supabase
-        .from("interview_questions")
-        .update({ answer: userMessage })
-        .eq("session_id", sessionId)
-        .eq("question_number", lastQa.number);
+      try {
+        await supabase
+          .from("interview_questions")
+          .update({ answer: userMessage })
+          .eq("session_id", sessionId)
+          .eq("question_number", lastQa.number);
+      } catch (dbError) {
+        console.error("Failed to save answer:", dbError);
+      }
     }
 
     try {
+      // Build conversation history for the API (only role and content)
+      const conversationHistory = messages
+        .filter((m) => m.content)
+        .map((m) => ({ role: m.role, content: m.content }));
+      
+      conversationHistory.push({ role: "user", content: userMessage });
+
+      console.log("Sending to chat API:", { messages: conversationHistory.length });
+
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -425,36 +511,48 @@ export const InterviewPage = () => {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: [...messages, { role: "user", content: userMessage }],
+          messages: conversationHistory,
           interviewType: state?.interviewType,
           role: state?.role,
           resumeText: state?.resumeText,
         }),
       });
 
-      if (!response.ok || !response.body) throw new Error("Failed to send message");
+      console.log("Chat API response status:", response.status);
 
-      const fullResponse = await streamResponse(response);
+      if (!response.ok || !response.body) {
+        const errorText = await response.text();
+        console.error("Chat API error:", response.status, errorText);
+        throw new Error("Failed to send message");
+      }
 
-      // Store new question
+      // Calculate next question number BEFORE streaming
+      const nextQuestionNumber = qaRef.current.length + 1;
+      const fullResponse = await streamResponse(response, nextQuestionNumber);
+      console.log("Streamed response length:", fullResponse.length);
+
+      // Store new question using qaRef length as source of truth
       if (sessionId && fullResponse) {
-        const nextQuestionNumber = questionCount + 1;
+        try {
+          await supabase.from("interview_questions").insert({
+            session_id: sessionId,
+            question_number: nextQuestionNumber,
+            question: fullResponse,
+          });
+          qaRef.current.push({ question: fullResponse, answer: "", number: nextQuestionNumber });
+          console.log("Stored question:", nextQuestionNumber);
 
-        await supabase.from("interview_questions").insert({
-          session_id: sessionId,
-          question_number: nextQuestionNumber,
-          question: fullResponse,
-        });
-        qaRef.current.push({ question: fullResponse, answer: "", number: nextQuestionNumber });
-
-        // Start recording the answer for the new question
-        startRecordingForQuestion(nextQuestionNumber);
+          // Start recording the answer for the new question
+          startRecordingForQuestion(nextQuestionNumber);
+        } catch (dbError) {
+          console.error("Failed to save question:", dbError);
+        }
       }
 
       if (voiceEnabled && fullResponse) await speakText(fullResponse);
     } catch (error) {
       console.error("Chat error:", error);
-      toast.error("Failed to get response");
+      toast.error("Failed to get response. Please try again.");
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
@@ -470,26 +568,49 @@ export const InterviewPage = () => {
 
   const handleEndInterview = async () => {
     try {
+      // Stop speech synthesis
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+
       // Stop listening (microphone)
-      scribe.disconnect();
-      setIsListening(false);
+      try {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        }
+        setIsListening(false);
+      } catch (e) {
+        console.error("Error stopping recognition:", e);
+      }
 
       // Stop and save any in-progress recording
-      const lastQuestionNumber = qaRef.current[qaRef.current.length - 1]?.number;
-      if (lastQuestionNumber) {
-        await stopAndSaveRecording(lastQuestionNumber);
+      try {
+        const lastQuestionNumber = qaRef.current[qaRef.current.length - 1]?.number;
+        if (lastQuestionNumber) {
+          await stopAndSaveRecording(lastQuestionNumber);
+        }
+        videoRecorder.cancelRecording();
+      } catch (e) {
+        console.error("Error stopping recording:", e);
       }
-      videoRecorder.cancelRecording();
 
       // Hard-stop camera tracks
-      cameraRef.current
-        ?.getStream()
-        ?.getTracks()
-        .forEach((t) => t.stop());
+      try {
+        cameraRef.current
+          ?.getStream()
+          ?.getTracks()
+          .forEach((t) => t.stop());
+      } catch (e) {
+        console.error("Error stopping camera:", e);
+      }
 
       // Exit fullscreen if active
-      if (document.fullscreenElement) {
-        await document.exitFullscreen().catch(() => {});
+      try {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen().catch(() => {});
+        }
+      } catch (e) {
+        console.error("Error exiting fullscreen:", e);
       }
     } finally {
       // Navigate to results with Q&A data
@@ -648,8 +769,8 @@ export const InterviewPage = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  if (isSpeaking && audioRef.current) {
-                    audioRef.current.pause();
+                  if (isSpeaking) {
+                    window.speechSynthesis.cancel();
                     setIsSpeaking(false);
                   }
                   setVoiceEnabled(!voiceEnabled);

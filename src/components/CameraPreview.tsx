@@ -34,6 +34,9 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isInitializedRef = useRef(false);
+    // Store callback in ref to avoid dependency changes triggering re-renders
+    const onEmotionCapturedRef = useRef(onEmotionCaptured);
+    onEmotionCapturedRef.current = onEmotionCaptured;
 
     // Expose stream getter to parent
     useImperativeHandle(ref, () => ({
@@ -114,7 +117,6 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       if (!ctx || video.readyState < 2) return;
 
       // Set canvas size to match video
-      //testing
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
 
@@ -144,14 +146,16 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
           confidence_level: emotionData.confidence_level,
         });
 
-        if (onEmotionCaptured) {
-          onEmotionCaptured(emotionData);
+        // Use ref to avoid dependency on callback
+        if (onEmotionCapturedRef.current) {
+          onEmotionCapturedRef.current(emotionData);
         }
       } catch (error) {
         console.error("Failed to analyze emotion:", error);
       }
-    }, [sessionId, onEmotionCaptured]);
+    }, [sessionId]);
 
+    // Start camera only when isActive changes - separate from capture logic
     useEffect(() => {
       if (!isActive) {
         stopCamera();
@@ -159,6 +163,17 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       }
 
       startCamera();
+
+      return () => {
+        stopCamera();
+      };
+    }, [isActive, startCamera, stopCamera]);
+
+    // Handle emotion capture interval separately to avoid restarting camera
+    useEffect(() => {
+      if (!isActive) return;
+
+      let checkReadyInterval: ReturnType<typeof setInterval> | null = null;
 
       const startCapture = () => {
         if (intervalRef.current) return;
@@ -172,18 +187,25 @@ export const CameraPreview = forwardRef<CameraPreviewRef, CameraPreviewProps>(
       };
 
       // Wait for camera to be ready
-      const checkReady = setInterval(() => {
+      checkReadyInterval = setInterval(() => {
         if (streamRef.current && videoRef.current?.readyState >= 2) {
-          clearInterval(checkReady);
+          if (checkReadyInterval) clearInterval(checkReadyInterval);
           startCapture();
         }
       }, 500);
 
       return () => {
-        clearInterval(checkReady);
-        stopCamera();
+        if (checkReadyInterval) clearInterval(checkReadyInterval);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
       };
-    }, [isActive, captureInterval, startCamera, stopCamera, captureAndAnalyze]);
+    }, [isActive, captureInterval, captureAndAnalyze]);
 
     return (
       <div className="relative w-full h-full">
