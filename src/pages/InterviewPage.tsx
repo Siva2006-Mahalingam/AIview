@@ -472,10 +472,13 @@ export const InterviewPage = () => {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
-    // Stop and save video for the previous question
+    // Stop and save video for the previous question (non-blocking - upload in background)
     const lastQuestionNumber = qaRef.current[qaRef.current.length - 1]?.number;
     if (lastQuestionNumber) {
-      await stopAndSaveRecording(lastQuestionNumber);
+      // Fire and forget - don't await, let upload happen in background
+      stopAndSaveRecording(lastQuestionNumber).catch((err) =>
+        console.warn("Background video upload failed:", err)
+      );
     }
 
     // Save user's answer to previous question

@@ -34,10 +34,14 @@ export const useVideoRecorder = ({ sessionId, userId }: VideoRecorderOptions) =>
         const mimeType = preferredTypes.find((t) => MediaRecorder.isTypeSupported(t));
         console.log("useVideoRecorder: Starting recording for Q", questionNumber, "with mimeType", mimeType);
 
-        const mediaRecorder = new MediaRecorder(
-          existingStream,
-          mimeType ? { mimeType } : undefined
-        );
+        // Use lower bitrate for faster uploads (500kbps video + 64kbps audio)
+        const options: MediaRecorderOptions = {
+          videoBitsPerSecond: 500000,
+          audioBitsPerSecond: 64000,
+        };
+        if (mimeType) options.mimeType = mimeType;
+
+        const mediaRecorder = new MediaRecorder(existingStream, options);
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {

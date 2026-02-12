@@ -55,13 +55,15 @@ export function VideoThumbnail({ videoRef, onClick }: VideoThumbnailProps) {
         video.onloadedmetadata = () => {
           if (cancelled) return;
 
-          // Format duration
-          const mins = Math.floor(video.duration / 60);
-          const secs = Math.floor(video.duration % 60);
-          setDuration(`${mins}:${secs.toString().padStart(2, "0")}`);
+          // Format duration (only if valid finite number)
+          if (Number.isFinite(video.duration) && video.duration > 0) {
+            const mins = Math.floor(video.duration / 60);
+            const secs = Math.floor(video.duration % 60);
+            setDuration(`${mins}:${secs.toString().padStart(2, "0")}`);
+          }
 
           // Seek to 1 second for thumbnail
-          video.currentTime = Math.min(1, video.duration * 0.1);
+          video.currentTime = Math.min(1, video.duration > 0 ? video.duration * 0.1 : 0);
         };
 
         video.onseeked = () => {
