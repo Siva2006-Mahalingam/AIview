@@ -288,16 +288,16 @@ export const HistoryPage = () => {
                                     Q{q.question_number} {q.score ? `• ${q.score}%` : ""}
                                   </span>
                                 </div>
-                                <p className="font-medium text-foreground text-sm mb-2 line-clamp-1">
+                                <p className="font-medium text-foreground text-sm mb-2">
                                   {q.question}
                                 </p>
                                 {q.answer && (
-                                  <p className="text-sm text-muted-foreground line-clamp-2">
+                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
                                     {q.answer}
                                   </p>
                                 )}
                                 {q.feedback && (
-                                  <p className="text-xs text-muted-foreground mt-2 italic line-clamp-1">
+                                  <p className="text-xs text-muted-foreground mt-2 italic whitespace-pre-wrap break-words">
                                     {q.feedback}
                                   </p>
                                 )}
