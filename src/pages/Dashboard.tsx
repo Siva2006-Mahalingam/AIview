@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2, BarChart3, Trophy, Zap, Shield } from "lucide-react";
+import { LogOut, Plus, FileText, History, User, ArrowRight, Loader2, BarChart3, Trophy, Zap, Shield, Save } from "lucide-react";
 
 // Admin email allowlist
 const ADMIN_EMAILS = ["231001203@rajalakshmi.edu.in"];
@@ -12,6 +15,20 @@ interface Profile {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone: string | null;
+  target_role: string | null;
+  years_experience: number | null;
+  linkedin_url: string | null;
+  bio: string | null;
+}
+
+interface ProfileFormState {
+  full_name: string;
+  phone: string;
+  target_role: string;
+  years_experience: string;
+  linkedin_url: string;
+  bio: string;
 }
 
 interface Resume {
@@ -34,8 +51,17 @@ interface InterviewSession {
 export const Dashboard = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileForm, setProfileForm] = useState<ProfileFormState>({
+    full_name: "",
+    phone: "",
+    target_role: "",
+    years_experience: "",
+    linkedin_url: "",
+    bio: "",
+  });
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +82,14 @@ export const Dashboard = () => {
 
         if (profileData) {
           setProfile(profileData);
+          setProfileForm({
+            full_name: profileData.full_name ?? "",
+            phone: profileData.phone ?? "",
+            target_role: profileData.target_role ?? "",
+            years_experience: profileData.years_experience?.toString() ?? "",
+            linkedin_url: profileData.linkedin_url ?? "",
+            bio: profileData.bio ?? "",
+          });
         }
 
         // Fetch resumes
@@ -98,6 +132,88 @@ export const Dashboard = () => {
 
   const handleStartInterview = () => {
     navigate("/interview-setup");
+  };
+
+  const handleProfileFieldChange = (field: keyof ProfileFormState, value: string) => {
+    setProfileForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsSavingProfile(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+
+      const yearsInput = profileForm.years_experience.trim();
+      let parsedYearsExperience: number | null = null;
+      if (yearsInput) {
+        const parsedValue = Number(yearsInput);
+        if (!Number.isInteger(parsedValue) || parsedValue < 0) {
+          toast.error("Years of experience must be a non-negative whole number");
+          return;
+        }
+        parsedYearsExperience = parsedValue;
+      }
+
+      const profilePayload = {
+        full_name: profileForm.full_name.trim() || null,
+        phone: profileForm.phone.trim() || null,
+        target_role: profileForm.target_role.trim() || null,
+        years_experience: parsedYearsExperience,
+        linkedin_url: profileForm.linkedin_url.trim() || null,
+        bio: profileForm.bio.trim() || null,
+        email: profile?.email ?? user.email ?? null,
+      };
+
+      const { data: updatedProfile, error } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            user_id: user.id,
+            ...profilePayload,
+          },
+          { onConflict: "user_id" }
+        )
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      setProfile(updatedProfile);
+      setProfileForm({
+        full_name: updatedProfile.full_name ?? "",
+        phone: updatedProfile.phone ?? "",
+        target_role: updatedProfile.target_role ?? "",
+        years_experience: updatedProfile.years_experience?.toString() ?? "",
+        linkedin_url: updatedProfile.linkedin_url ?? "",
+        bio: updatedProfile.bio ?? "",
+      });
+
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          full_name: profilePayload.full_name,
+          phone: profilePayload.phone,
+          target_role: profilePayload.target_role,
+          years_experience: profilePayload.years_experience,
+          linkedin_url: profilePayload.linkedin_url,
+          bio: profilePayload.bio,
+        },
+      });
+
+      if (metadataError) {
+        console.warn("Profile updated but auth metadata sync failed:", metadataError.message);
+      }
+
+      toast.success("Profile updated successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   if (isLoading) {
@@ -150,6 +266,99 @@ export const Dashboard = () => {
             Ready for your next interview practice session?
           </p>
         </div>
+
+        {/* Profile Settings */}
+        <section className="mb-8 bg-card border border-border rounded-2xl p-6">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Keep your interview profile details updated.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="profile-full-name">Full Name</Label>
+              <Input
+                id="profile-full-name"
+                value={profileForm.full_name}
+                onChange={(e) => handleProfileFieldChange("full_name", e.target.value)}
+                placeholder="John Doe"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="profile-phone">Phone Number</Label>
+              <Input
+                id="profile-phone"
+                value={profileForm.phone}
+                onChange={(e) => handleProfileFieldChange("phone", e.target.value)}
+                placeholder="+91 98765 43210"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="profile-target-role">Target Role</Label>
+              <Input
+                id="profile-target-role"
+                value={profileForm.target_role}
+                onChange={(e) => handleProfileFieldChange("target_role", e.target.value)}
+                placeholder="Frontend Developer"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="profile-years-experience">Years of Experience</Label>
+              <Input
+                id="profile-years-experience"
+                type="number"
+                min={0}
+                step={1}
+                value={profileForm.years_experience}
+                onChange={(e) => handleProfileFieldChange("years_experience", e.target.value)}
+                placeholder="2"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="profile-linkedin">LinkedIn URL</Label>
+              <Input
+                id="profile-linkedin"
+                type="url"
+                value={profileForm.linkedin_url}
+                onChange={(e) => handleProfileFieldChange("linkedin_url", e.target.value)}
+                placeholder="https://linkedin.com/in/your-name"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="profile-bio">Short Bio</Label>
+              <Textarea
+                id="profile-bio"
+                value={profileForm.bio}
+                onChange={(e) => handleProfileFieldChange("bio", e.target.value)}
+                placeholder="Share your background, strengths, and interview goals"
+                className="min-h-24"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+              {isSavingProfile ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Profile
+                </>
+              )}
+            </Button>
+          </div>
+        </section>
 
         {/* Quick Actions */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

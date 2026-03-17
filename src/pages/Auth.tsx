@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 
@@ -15,6 +16,11 @@ export const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [targetRole, setTargetRole] = useState("");
+  const [yearsExperience, setYearsExperience] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [bio, setBio] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,12 +32,39 @@ export const Auth = () => {
     const redirectUrl = import.meta.env.VITE_APP_URL || window.location.origin;
 
     try {
+      const toNullable = (value: string) => {
+        const normalized = value.trim();
+        return normalized.length > 0 ? normalized : null;
+      };
+
       if (mode === "signup") {
+        const trimmedFullName = fullName.trim();
+        if (!trimmedFullName) {
+          throw new Error("Full name is required");
+        }
+
+        const yearsInput = yearsExperience.trim();
+        let parsedYearsExperience: number | null = null;
+        if (yearsInput) {
+          const parsedValue = Number(yearsInput);
+          if (!Number.isInteger(parsedValue) || parsedValue < 0) {
+            throw new Error("Years of experience must be a non-negative whole number");
+          }
+          parsedYearsExperience = parsedValue;
+        }
+
         const { error } = await supabase.auth.signUp({
-          email,
+          email: email.trim(),
           password,
           options: {
-            data: { full_name: fullName },
+            data: {
+              full_name: trimmedFullName,
+              phone: toNullable(phone),
+              target_role: toNullable(targetRole),
+              years_experience: parsedYearsExperience,
+              linkedin_url: toNullable(linkedinUrl),
+              bio: toNullable(bio),
+            },
             emailRedirectTo: `${redirectUrl}/auth`,
           },
         });
@@ -40,7 +73,7 @@ export const Auth = () => {
         toast.success("Check your email to confirm your account!");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim(),
           password,
         });
 
@@ -89,18 +122,81 @@ export const Auth = () => {
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === "signup" && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                    className="h-12"
-                  />
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="John Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      className="h-12"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="h-12"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="targetRole">Target Role</Label>
+                    <Input
+                      id="targetRole"
+                      type="text"
+                      placeholder="Frontend Developer"
+                      value={targetRole}
+                      onChange={(e) => setTargetRole(e.target.value)}
+                      className="h-12"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="yearsExperience">Years of Experience</Label>
+                    <Input
+                      id="yearsExperience"
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="2"
+                      value={yearsExperience}
+                      onChange={(e) => setYearsExperience(e.target.value)}
+                      className="h-12"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
+                    <Input
+                      id="linkedinUrl"
+                      type="url"
+                      placeholder="https://linkedin.com/in/your-name"
+                      value={linkedinUrl}
+                      onChange={(e) => setLinkedinUrl(e.target.value)}
+                      className="h-12"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bio">Short Bio</Label>
+                    <Textarea
+                      id="bio"
+                      placeholder="A brief summary about your background and goals"
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      className="min-h-24"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="space-y-2">

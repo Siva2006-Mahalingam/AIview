@@ -32,6 +32,15 @@ interface PdfExportButtonProps {
 export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
 
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  const formatMultilineHtml = (value: string) => escapeHtml(value).replace(/\n/g, "<br />");
+
   const handleExport = async () => {
     setIsExporting(true);
 
@@ -80,6 +89,8 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
         return "#ef4444";
       };
 
+      const atsDisplay = sessionData.atsScore === null ? "Resume required" : `${sessionData.atsScore}/100`;
+
       container.innerHTML = `
         <div style="text-align: center; margin-bottom: 32px; border-bottom: 2px solid #e5e5e5; padding-bottom: 24px;">
           <h1 style="font-size: 28px; font-weight: bold; margin: 0 0 8px 0; color: #1a1a1a;">
@@ -97,7 +108,7 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
           <div style="flex: 1; padding: 16px; background: #f9f9f9; border-radius: 12px; margin: 0 8px;">
             <p style="color: #666; font-size: 12px; margin: 0 0 4px 0;">ATS Score</p>
             <p style="font-size: 32px; font-weight: bold; margin: 0; color: ${getScoreColor(sessionData.atsScore)};">
-              ${sessionData.atsScore ?? "-"}/100
+              ${atsDisplay}
             </p>
           </div>
           <div style="flex: 1; padding: 16px; background: #f9f9f9; border-radius: 12px; margin: 0 8px;">
@@ -119,7 +130,7 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
             ✓ Overall Feedback
           </h2>
           <div style="background: #f9f9f9; padding: 16px; border-radius: 8px; border-left: 4px solid #22c55e;">
-            <p style="margin: 0; line-height: 1.6; white-space: pre-wrap;">${sessionData.overallFeedback || "No feedback available."}</p>
+            <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${formatMultilineHtml(sessionData.overallFeedback || "No feedback available.")}</p>
           </div>
         </div>
 
@@ -128,7 +139,7 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
             ⚠ Areas for Improvement
           </h2>
           <div style="background: #f9f9f9; padding: 16px; border-radius: 8px; border-left: 4px solid #eab308;">
-            <p style="margin: 0; line-height: 1.6; white-space: pre-wrap;">${sessionData.improvements || "No specific improvements identified."}</p>
+            <p style="margin: 0; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${formatMultilineHtml(sessionData.improvements || "No specific improvements identified.")}</p>
           </div>
         </div>
 
@@ -146,15 +157,15 @@ export function PdfExportButton({ sessionData }: PdfExportButtonProps) {
                 </span>
               </div>
               <p style="font-weight: 600; margin: 0 0 8px 0; color: #1a1a1a;">Question:</p>
-              <p style="margin: 0 0 12px 0; color: #333;">${q.question}</p>
+              <p style="margin: 0 0 12px 0; color: #333; white-space: pre-wrap; word-break: break-word;">${formatMultilineHtml(q.question)}</p>
               <p style="font-weight: 600; margin: 0 0 8px 0; color: #1a1a1a;">Your Answer:</p>
-              <p style="margin: 0 0 12px 0; color: #333;">${q.answer || "No answer provided"}</p>
+              <p style="margin: 0 0 12px 0; color: #333; white-space: pre-wrap; word-break: break-word;">${formatMultilineHtml(q.answer || "No answer provided")}</p>
               ${
                 q.feedback
                   ? `
                 <div style="background: #e5e5e5; padding: 12px; border-radius: 6px; margin-top: 8px;">
                   <p style="font-weight: 600; margin: 0 0 4px 0; font-size: 13px;">Feedback:</p>
-                  <p style="margin: 0; color: #555; font-size: 13px;">${q.feedback}</p>
+                  <p style="margin: 0; color: #555; font-size: 13px; white-space: pre-wrap; word-break: break-word;">${formatMultilineHtml(q.feedback)}</p>
                 </div>
               `
                   : ""

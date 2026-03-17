@@ -31,6 +31,13 @@ interface LocationState {
   interviewType?: string;
   role?: string;
   duration?: number;
+  resumeText?: string;
+}
+
+interface SessionDetails {
+  interview_type: string;
+  role: string;
+  resume_id: string | null;
 }
 
 export const ResultsPage = () => {
@@ -46,6 +53,8 @@ export const ResultsPage = () => {
   const [improvements, setImprovements] = useState<string | null>(null);
   const [questions, setQuestions] = useState<QuestionFeedback[]>([]);
   const [expandedQuestions, setExpandedQuestions] = useState<number[]>([]);
+  const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
+  const [hasResumeForAts, setHasResumeForAts] = useState<boolean | null>(null);
   const [emotionSummary, setEmotionSummary] = useState<{
     avgConfidence: number;
     nervousCount: number;
@@ -68,7 +77,7 @@ export const ResultsPage = () => {
 
       const { data: sessionCheck } = await supabase
         .from("interview_sessions")
-        .select("id, user_id")
+        .select("id, user_id, resume_id, interview_type, role")
         .eq("id", sessionId)
         .single();
 
@@ -77,6 +86,12 @@ export const ResultsPage = () => {
         navigate("/dashboard");
         return;
       }
+
+      setSessionDetails({
+        interview_type: sessionCheck.interview_type,
+        role: sessionCheck.role,
+        resume_id: sessionCheck.resume_id,
+      });
 
       setIsGenerating(true);
 
@@ -109,22 +124,41 @@ export const ResultsPage = () => {
           });
         }
 
+        let resumeText = state?.resumeText?.trim() || "";
+        if (!resumeText && sessionCheck.resume_id) {
+          const { data: resumeData } = await supabase
+            .from("resumes")
+            .select("ocr_text")
+            .eq("id", sessionCheck.resume_id)
+            .maybeSingle();
+
+          resumeText = resumeData?.ocr_text?.trim() || "";
+        }
+
+        const shouldGenerateAts = Boolean(resumeText);
+        setHasResumeForAts(shouldGenerateAts);
+
         // Call edge function to generate comprehensive feedback
         const { data: feedbackData, error } = await supabase.functions.invoke("generate-feedback", {
           body: {
             sessionId,
             questions: questionsData || state?.qaData || [],
-            interviewType: state?.interviewType,
-            role: state?.role,
+            interviewType: state?.interviewType || sessionCheck.interview_type,
+            role: state?.role || sessionCheck.role,
             duration: state?.duration,
             emotionData: emotionsData,
+            resumeText,
           },
         });
 
         if (error) throw error;
 
+        const normalizedAtsScore = typeof feedbackData?.atsScore === "number"
+          ? feedbackData.atsScore
+          : null;
+
         // Update state with generated feedback
-        setAtsScore(feedbackData.atsScore);
+        setAtsScore(normalizedAtsScore);
         setPerformancePercentage(feedbackData.performancePercentage);
         setOverallFeedback(feedbackData.overallFeedback);
         setImprovements(feedbackData.improvements);
@@ -148,7 +182,7 @@ export const ResultsPage = () => {
           .from("interview_sessions")
           .update({
             status: "completed",
-            ats_score: feedbackData.atsScore,
+            ats_score: normalizedAtsScore,
             performance_percentage: feedbackData.performancePercentage,
             overall_feedback: feedbackData.overallFeedback,
             improvements: feedbackData.improvements,
@@ -195,6 +229,10 @@ export const ResultsPage = () => {
     return "bg-destructive/20";
   };
 
+  const interviewTypeLabel = sessionDetails?.interview_type || state?.interviewType || "Interview";
+  const roleLabel = sessionDetails?.role || state?.role || "selected role";
+  const feedbackTextClassName = "whitespace-pre-wrap break-words leading-7";
+
   if (isGenerating) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -206,9 +244,15 @@ export const ResultsPage = () => {
           </p>
           <div className="space-y-2 text-sm text-muted-foreground">
             <p className="animate-pulse">✓ Evaluating answer quality</p>
-            <p className="animate-pulse" style={{ animationDelay: "0.2s" }}>
-              ✓ Calculating ATS score
-            </p>
+            {hasResumeForAts === false ? (
+              <p className="animate-pulse" style={{ animationDelay: "0.2s" }}>
+                ✓ ATS score skipped because no resume was uploaded
+              </p>
+            ) : (
+              <p className="animate-pulse" style={{ animationDelay: "0.2s" }}>
+                ✓ Calculating ATS score
+              </p>
+            )}
             <p className="animate-pulse" style={{ animationDelay: "0.4s" }}>
               ✓ Generating improvement suggestions
             </p>
@@ -230,8 +274,8 @@ export const ResultsPage = () => {
           <div className="flex items-center gap-2">
             <PdfExportButton
               sessionData={{
-                interviewType: state?.interviewType,
-                role: state?.role,
+                interviewType: interviewTypeLabel,
+                role: roleLabel,
                 atsScore,
                 performancePercentage,
                 overallFeedback,
@@ -251,8 +295,8 @@ export const ResultsPage = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Interview Complete! 🎉</h1>
           <p className="text-muted-foreground">
-            {state?.interviewType?.charAt(0).toUpperCase() + state?.interviewType?.slice(1)} Interview
-            for {state?.role}
+            {interviewTypeLabel.charAt(0).toUpperCase() + interviewTypeLabel.slice(1)} Interview
+            for {roleLabel}
           </p>
         </div>
 
@@ -264,9 +308,14 @@ export const ResultsPage = () => {
               <Trophy className="h-8 w-8 text-primary-foreground" />
             </div>
             <p className="text-sm text-muted-foreground mb-1">ATS Score</p>
-            <p className={`text-4xl font-bold ${getScoreColor(atsScore || 0)}`}>
-              {atsScore ?? "-"}/100
+            <p className={`text-4xl font-bold ${atsScore === null ? "text-muted-foreground" : getScoreColor(atsScore)}`}>
+              {atsScore === null ? "Resume required" : `${atsScore}/100`}
             </p>
+            {atsScore === null && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Upload a resume before the interview to receive ATS scoring.
+              </p>
+            )}
           </div>
 
           {/* Performance */}
@@ -304,7 +353,9 @@ export const ResultsPage = () => {
             Overall Feedback
           </h2>
           <div className="bg-card border border-border rounded-xl p-6">
-            <p className="text-foreground whitespace-pre-wrap">{overallFeedback || "No feedback available."}</p>
+            <p className={`text-foreground ${feedbackTextClassName}`}>
+              {overallFeedback || "No feedback available."}
+            </p>
           </div>
         </section>
 
@@ -315,7 +366,9 @@ export const ResultsPage = () => {
             Areas for Improvement
           </h2>
           <div className="bg-card border border-border rounded-xl p-6">
-            <p className="text-foreground whitespace-pre-wrap">{improvements || "No specific improvements identified."}</p>
+            <p className={`text-foreground ${feedbackTextClassName}`}>
+              {improvements || "No specific improvements identified."}
+            </p>
           </div>
         </section>
 
@@ -350,16 +403,20 @@ export const ResultsPage = () => {
                   <div className="px-4 pb-4 space-y-4 border-t border-border pt-4">
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-1">Question</h4>
-                      <p className="text-foreground">{q.question}</p>
+                      <p className="text-foreground break-words leading-7">{q.question}</p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-muted-foreground mb-1">Your Answer</h4>
-                      <p className="text-foreground">{q.answer || "No answer provided"}</p>
+                      <p className={`text-foreground ${feedbackTextClassName}`}>
+                        {q.answer || "No answer provided"}
+                      </p>
                     </div>
                     {q.feedback && (
                       <div className="bg-secondary/50 rounded-lg p-4">
                         <h4 className="text-sm font-medium text-foreground mb-1">Feedback</h4>
-                        <p className="text-muted-foreground text-sm">{q.feedback}</p>
+                        <p className={`text-muted-foreground text-sm ${feedbackTextClassName}`}>
+                          {q.feedback}
+                        </p>
                       </div>
                     )}
                   </div>

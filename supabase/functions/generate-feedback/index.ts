@@ -11,9 +11,11 @@ serve(async (req) => {
   }
 
   try {
-    const { sessionId, questions, interviewType, role, duration, emotionData } = await req.json();
+    const { questions, interviewType, role, duration, emotionData, resumeText } = await req.json();
 
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")!;
+    const normalizedResumeText = typeof resumeText === "string" ? resumeText.trim() : "";
+    const hasResumeText = normalizedResumeText.length > 0;
 
     // Format questions for analysis
     const questionsText = questions
@@ -36,9 +38,20 @@ Emotion Analysis:
 `;
     }
 
+    const resumeSection = hasResumeText
+      ? `Resume Content:
+${normalizedResumeText}
+
+Use this resume content when evaluating ATS alignment, keyword relevance, and clarity for the target role.`
+      : `No resume was uploaded.
+
+Set "atsScore" to null and do not infer ATS readiness from the interview answers alone.`;
+
     const prompt = `You are an expert interview coach and career consultant. Analyze this ${interviewType} interview for the role of ${role}.
 
 ${questionsText}
+
+${resumeSection}
 
 ${emotionSummary}
 
@@ -46,7 +59,7 @@ Interview Duration: ${Math.floor((duration || 0) / 60)} minutes
 
 Provide a comprehensive evaluation in JSON format with the following structure:
 {
-  "atsScore": <number 0-100 - how well the candidate would score in an ATS system based on keyword usage, relevance, and clarity>,
+  "atsScore": <number 0-100 or null when no resume is available>,
   "performancePercentage": <number 0-100 - overall interview performance score>,
   "overallFeedback": "<detailed paragraph about overall performance, strengths, and communication style>",
   "improvements": "<specific, actionable improvement suggestions as a paragraph>",
@@ -65,6 +78,9 @@ Be constructive but honest. Focus on actionable feedback that helps the candidat
 - Communication clarity and structure
 - Relevance of examples
 - Confidence level from emotion analysis
+- Resume-to-role keyword alignment only when a resume is provided
+
+If no resume is provided, atsScore must be null.
 
 Return ONLY the JSON object, no markdown formatting.`;
 
@@ -105,7 +121,7 @@ Return ONLY the JSON object, no markdown formatting.`;
     } catch {
       // Default response if parsing fails
       feedback = {
-        atsScore: 65,
+        atsScore: hasResumeText ? 65 : null,
         performancePercentage: 70,
         overallFeedback: "You demonstrated good communication skills during the interview. Your answers showed relevant experience and knowledge. Continue to work on structuring your responses using the STAR method for behavioral questions.",
         improvements: "Consider providing more specific examples with quantifiable results. Practice articulating your thoughts more concisely. Work on reducing nervous habits and maintaining consistent confidence throughout the interview.",
@@ -116,6 +132,54 @@ Return ONLY the JSON object, no markdown formatting.`;
         })),
       };
     }
+
+    const clampScore = (value: unknown) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return null;
+      }
+
+      return Math.max(0, Math.min(100, Math.round(value)));
+    };
+
+    const normalizeText = (value: unknown, fallback: string) => {
+      if (typeof value !== "string") {
+        return fallback;
+      }
+
+      const trimmed = value.trim();
+      return trimmed || fallback;
+    };
+
+    const defaultQuestionFeedback = questions.map((q: any, i: number) => ({
+      questionNumber: q.question_number || i + 1,
+      score: 70,
+      feedback: "Your answer addressed the question but could benefit from more specific details and examples.",
+    }));
+
+    feedback = {
+      atsScore: hasResumeText ? clampScore(feedback.atsScore) : null,
+      performancePercentage: clampScore(feedback.performancePercentage) ?? 70,
+      overallFeedback: normalizeText(
+        feedback.overallFeedback,
+        "You demonstrated good communication skills during the interview. Your answers showed relevant experience and knowledge. Continue to work on structuring your responses using the STAR method for behavioral questions."
+      ),
+      improvements: normalizeText(
+        feedback.improvements,
+        "Consider providing more specific examples with quantifiable results. Practice articulating your thoughts more concisely. Work on reducing nervous habits and maintaining consistent confidence throughout the interview."
+      ),
+      questionFeedback: Array.isArray(feedback.questionFeedback) && feedback.questionFeedback.length > 0
+        ? feedback.questionFeedback.map((item: any, index: number) => ({
+            questionNumber: typeof item?.questionNumber === "number"
+              ? item.questionNumber
+              : questions[index]?.question_number || index + 1,
+            score: clampScore(item?.score) ?? 70,
+            feedback: normalizeText(
+              item?.feedback,
+              "Your answer addressed the question but could benefit from more specific details and examples."
+            ),
+          }))
+        : defaultQuestionFeedback,
+    };
 
     return new Response(JSON.stringify(feedback), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
