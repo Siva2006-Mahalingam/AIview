@@ -13,7 +13,10 @@ serve(async (req) => {
   try {
     const { questions, interviewType, role, duration, emotionData, resumeText } = await req.json();
 
-    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")!;
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
+    }
     const normalizedResumeText = typeof resumeText === "string" ? resumeText.trim() : "";
     const hasResumeText = normalizedResumeText.length > 0;
 

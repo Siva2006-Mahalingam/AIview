@@ -71,11 +71,41 @@ export const LeaderboardPage = () => {
         userAggregates[s.user_id].count++;
       });
 
-      // Create leaderboard with anonymous names
+      // Fetch profiles for all user_ids in one query
+      const userIds = Object.keys(userAggregates);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, email")
+        .in("user_id", userIds);
+
+      const profileMap: Record<string, { full_name: string | null; email: string | null }> = {};
+      profiles?.forEach((p) => {
+        profileMap[p.user_id] = { full_name: p.full_name, email: p.email };
+      });
+
+      const getDisplayName = (userId: string, fallbackIdx: number): string => {
+        if (userId === user.id) {
+          const name = profileMap[userId]?.full_name?.trim();
+          return name ? `${name} (You)` : "You";
+        }
+        const name = profileMap[userId]?.full_name?.trim();
+        if (name) return name;
+        // Mask email for privacy: show only first part before @
+        const email = profileMap[userId]?.email;
+        if (email) {
+          const localPart = email.split("@")[0];
+          return localPart.length > 3
+            ? `${localPart.slice(0, 2)}${"*".repeat(localPart.length - 2)}`
+            : localPart;
+        }
+        return `Interviewer #${fallbackIdx + 1}`;
+      };
+
+      // Create leaderboard with real names
       const entries: LeaderboardEntry[] = Object.entries(userAggregates)
         .map(([userId, data], idx) => ({
           rank: 0,
-          displayName: userId === user.id ? "You" : `Interviewer #${idx + 1}`,
+          displayName: getDisplayName(userId, idx),
           avgScore: Math.round(data.total / data.count),
           totalInterviews: data.count,
           isCurrentUser: userId === user.id,

@@ -77,7 +77,7 @@ export const ResultsPage = () => {
 
       const { data: sessionCheck } = await supabase
         .from("interview_sessions")
-        .select("id, user_id, resume_id, interview_type, role")
+        .select("id, user_id, resume_id, interview_type, role, status, ats_score, performance_percentage, overall_feedback, improvements")
         .eq("id", sessionId)
         .single();
 
@@ -122,6 +122,17 @@ export const ResultsPage = () => {
             nervousCount,
             totalSnapshots: emotionsData.length,
           });
+        }
+
+        // If session is already completed with feedback, load from DB instead of re-generating
+        if (sessionCheck.status === "completed" && sessionCheck.overall_feedback) {
+          setAtsScore(sessionCheck.ats_score ?? null);
+          setPerformancePercentage(sessionCheck.performance_percentage ?? null);
+          setOverallFeedback(sessionCheck.overall_feedback);
+          setImprovements(sessionCheck.improvements ?? null);
+          setHasResumeForAts(sessionCheck.ats_score !== null);
+          setIsGenerating(false);
+          return;
         }
 
         let resumeText = state?.resumeText?.trim() || "";

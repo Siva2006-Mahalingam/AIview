@@ -98,14 +98,13 @@ export const AnalyticsPage = () => {
 
   const totalInterviews = sessions.length;
 
-  const avgDuration = sessions.length > 0
+  const sessionsWithEnd = sessions.filter((s) => s.ended_at);
+  const avgDuration = sessionsWithEnd.length > 0
     ? Math.round(
-        sessions
-          .filter((s) => s.ended_at)
-          .reduce((sum, s) => {
-            const duration = new Date(s.ended_at!).getTime() - new Date(s.started_at).getTime();
-            return sum + duration / 60000;
-          }, 0) / sessions.filter((s) => s.ended_at).length
+        sessionsWithEnd.reduce((sum, s) => {
+          const duration = new Date(s.ended_at!).getTime() - new Date(s.started_at).getTime();
+          return sum + duration / 60000;
+        }, 0) / sessionsWithEnd.length
       )
     : 0;
 

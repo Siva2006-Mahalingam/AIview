@@ -34,7 +34,7 @@ export const useAntiCheat = ({ sessionId, isActive, onFullscreenExit }: AntiChea
   useEffect(() => {
     if (!isActive) return;
 
-    // Track tab visibility changes
+    // Track tab visibility changes (covers both tab switches and app switches)
     const handleVisibilityChange = () => {
       if (document.hidden) {
         tabSwitchesRef.current += 1;
@@ -43,15 +43,6 @@ export const useAntiCheat = ({ sessionId, isActive, onFullscreenExit }: AntiChea
         });
         updateDatabase();
       }
-    };
-
-    // Track window blur (switching to another app)
-    const handleBlur = () => {
-      tabSwitchesRef.current += 1;
-      toast.warning("Window focus lost. This will be recorded.", {
-        duration: 3000,
-      });
-      updateDatabase();
     };
 
     // Track window resize (debounced)
@@ -84,13 +75,11 @@ export const useAntiCheat = ({ sessionId, isActive, onFullscreenExit }: AntiChea
 
     // Add event listeners
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
     window.addEventListener("resize", handleResize);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };

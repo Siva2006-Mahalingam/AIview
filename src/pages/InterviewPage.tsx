@@ -421,16 +421,27 @@ export const InterviewPage = () => {
     return assistantContent;
   };
 
+  // Keep refs for values used in initInterview to avoid re-triggering
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
+  const speakTextRef = useRef(speakText);
+  speakTextRef.current = speakText;
+  const startRecordingRef = useRef(startRecordingForQuestion);
+  startRecordingRef.current = startRecordingForQuestion;
+  const initCalledRef = useRef(false);
+
   // Initialize interview
   useEffect(() => {
     if (showSystemCheck) return; // Wait for system check to complete
-    
+    if (initCalledRef.current) return; // Prevent re-initialization
+
     const initInterview = async () => {
       if (!sessionId || !state) {
         navigate("/dashboard");
         return;
       }
 
+      initCalledRef.current = true;
       startTimeRef.current = Date.now();
       setIsInitializing(true);
       try {
@@ -463,10 +474,10 @@ export const InterviewPage = () => {
           qaRef.current.push({ question: fullResponse, answer: "", number: 1 });
 
           // Start recording the answer for Q1
-          startRecordingForQuestion(1);
+          startRecordingRef.current(1);
         }
 
-        if (voiceEnabled && fullResponse) await speakText(fullResponse);
+        if (voiceEnabledRef.current && fullResponse) await speakTextRef.current(fullResponse);
       } catch (error) {
         console.error("Init error:", error);
         toast.error("Failed to start interview");
@@ -476,7 +487,8 @@ export const InterviewPage = () => {
     };
 
     initInterview();
-  }, [sessionId, state, speakText, voiceEnabled, navigate, showSystemCheck]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, navigate, showSystemCheck]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;

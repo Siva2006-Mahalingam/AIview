@@ -68,6 +68,17 @@ export const PracticeModePage = () => {
     checkAuth();
   }, [navigate]);
 
+  // Cleanup speech recognition and synthesis on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
   const startCategory = (cat: "behavioral" | "technical" | "general") => {
     setCategory(cat);
     setQuestionIndex(0);
