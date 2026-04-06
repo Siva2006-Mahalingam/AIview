@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}InterviewAI - Authentication{% endblock %}
+{% block content %}
+<div class="page auth-page" data-page="auth">
+  <div class="auth-card">
+    <h1 id="auth-title">Welcome Back</h1>
+    <p id="auth-subtitle">Sign in to continue your interview practice</p>
+    <form id="auth-form">
+      <div class="signup-only hidden"><label>Full Name</label><input name="full_name" type="text" /></div>
+      <div class="signup-only hidden"><label>Phone</label><input name="phone" type="text" /></div>
+      <div class="signup-only hidden"><label>Target Role</label><input name="target_role" type="text" /></div>
+      <div class="signup-only hidden"><label>Years Experience</label><input name="years_experience" type="number" min="0" /></div>
+      <div class="signup-only hidden"><label>LinkedIn URL</label><input name="linkedin_url" type="url" /></div>
+      <div class="signup-only hidden"><label>Bio</label><textarea name="bio"></textarea></div>
+      <label>Email</label><input name="email" type="email" required />
+      <label>Password</label><input name="password" type="password" required />
+      <button class="btn btn-primary" type="submit" id="auth-submit">Sign In</button>
+    </form>
+    <button class="btn btn-link" id="toggle-auth-mode">Don't have an account? Sign Up</button>
+  </div>
+</div>
+{% endblock %}

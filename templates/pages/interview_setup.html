@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Interview Setup{% endblock %}
+{% block content %}
+<div class="page" data-page="interview-setup">
+  <main class="container section">
+    <h1>Interview Setup</h1>
+    <form id="setup-form" class="card">
+      <label>Interview Type</label>
+      <select name="interview_type" required>
+        <option value="behavioral">Behavioral</option>
+        <option value="technical">Technical</option>
+        <option value="case-study">Case Study</option>
+        <option value="general" selected>General</option>
+      </select>
+      <label>Role</label>
+      <input name="role" type="text" required placeholder="Software Engineer" />
+      <label>Resume (optional)</label>
+      <input name="file" type="file" />
+      <button class="btn btn-primary" type="submit">Start Interview</button>
+    </form>
+  </main>
+</div>
+{% endblock %}

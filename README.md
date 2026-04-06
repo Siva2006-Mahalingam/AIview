@@ -1,73 +1,46 @@
-# Welcome to your Lovable project
+# InterviewAI (Django + MySQL + HTML/CSS/JS)
 
-## Project info
+This project has been migrated to a Django full-stack application.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Stack
 
-## How can I edit this code?
+- Backend: Python Django
+- Database: MySQL
+- Frontend: Django templates + static HTML/CSS/JavaScript
 
-There are several ways of editing your application.
+## Setup
 
-**Use Lovable**
+1. Create and activate Python virtual environment.
+2. Install dependencies:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+pip install -r requirements.txt
 ```
 
-**Edit a file directly in GitHub**
+3. Configure environment from `.env.example`.
+4. Create MySQL database (`interviewai` by default).
+5. Run migrations:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+python manage.py migrate
+```
 
-**Use GitHub Codespaces**
+6. Create admin user (optional):
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+python manage.py createsuperuser
+```
 
-## What technologies are used for this project?
+7. Run server:
 
-This project is built with:
+```bash
+python manage.py runserver
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+App routes include `/`, `/auth/`, `/dashboard/`, `/interview-setup/`, `/history/`, `/results/<id>/`.
 
-## How can I deploy this project?
+## Notes
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Sensitive API keys are stored server-side in environment variables.
+- Frontend calls Django JSON APIs under `/api/...`.
+- Existing React source is retained in repository history/files, but app runtime now uses Django templates and static assets.

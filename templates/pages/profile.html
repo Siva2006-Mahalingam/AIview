@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<div class="page" data-page="profile">
+  <main class="container section">
+    <h1>My Profile</h1>
+    <form id="profile-form" class="card">
+      <label>Full Name</label><input name="full_name" type="text" />
+      <label>Phone</label><input name="phone" type="text" />
+      <label>Target Role</label><input name="target_role" type="text" />
+      <label>Years Experience</label><input name="years_experience" type="number" min="0" />
+      <label>LinkedIn URL</label><input name="linkedin_url" type="url" />
+      <label>Bio</label><textarea name="bio"></textarea>
+      <button class="btn btn-primary" type="submit">Save Profile</button>
+    </form>
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Interview{% endblock %}
+{% block content %}
+<div class="page" data-page="interview" data-session-id="{{ session_id }}">
+  <main class="container section interview-layout">
+    <h1>Interview Session</h1>
+    <aside class="interview-media-column">
+      <div class="media-panel interview-media-panel">
+        <video id="local-preview" class="local-preview" autoplay muted playsinline></video>
+        <div class="media-controls">
+          <span id="media-status">Initializing camera/mic...</span>
+        </div>
+      </div>
+    </aside>
+    <section class="card interview-content-column">
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form">
+        <textarea id="chat-input" required placeholder="Type your response..."></textarea>
+        <div class="media-controls" style="margin-bottom:10px;">
+          <span id="voice-status">Preparing voice interview...</span>
+        </div>
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+      <button class="btn btn-secondary" id="finish-interview">Finish Interview</button>
+    </section>
+  </main>
+</div>
+{% endblock %}

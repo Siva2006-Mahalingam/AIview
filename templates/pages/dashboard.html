@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page" data-page="dashboard">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand dashboard-brand">InterviewAI</div>
+      <div class="dashboard-top-actions">
+        <a class="btn btn-secondary" href="{% url 'profile' %}">My Profile</a>
+        <button class="btn btn-secondary" id="logout-btn">Logout</button>
+      </div>
+    </div>
+  </header>
+  <main class="container section dashboard-main">
+    <div id="post-finish-banner" class="card dashboard-banner hidden">
+      Interview completed and saved successfully.
+    </div>
+
+    <section class="dashboard-hero card">
+      <div>
+        <p class="dashboard-eyebrow">Interview Workspace</p>
+        <h1>Welcome back</h1>
+        <p class="dashboard-subtitle">Practice smarter with structured mock interviews, analytics, and progress tracking.</p>
+      </div>
+      <a class="btn btn-primary" href="{% url 'interview_setup' %}">Start New Interview</a>
+    </section>
+
+    <section class="dashboard-actions">
+      <a class="card dashboard-action-card" href="{% url 'interview_setup' %}">
+        <h3>Start Interview</h3>
+        <p>Launch a guided session with role-based questions.</p>
+      </a>
+      <a class="card dashboard-action-card" href="{% url 'history' %}">
+        <h3>Session History</h3>
+        <p>Review previous interviews and recordings.</p>
+      </a>
+      <a class="card dashboard-action-card" href="{% url 'analytics' %}">
+        <h3>Analytics</h3>
+        <p>Track performance trends and growth areas.</p>
+      </a>
+      <a class="card dashboard-action-card" href="{% url 'leaderboard' %}">
+        <h3>Leaderboard</h3>
+        <p>Compare your progress with the community.</p>
+      </a>
+      <a class="card dashboard-action-card" href="{% url 'practice' %}">
+        <h3>Practice Mode</h3>
+        <p>Sharpen skills in focused practice sessions.</p>
+      </a>
+      <a class="card dashboard-action-card" href="{% url 'admin_panel' %}">
+        <h3>Admin</h3>
+        <p>Manage users and monitor platform activity.</p>
+      </a>
+    </section>
+
+    <section class="section dashboard-recent-section">
+      <div class="dashboard-section-head">
+        <h2>Recent Sessions</h2>
+        <a class="btn btn-link" href="{% url 'history' %}">View all</a>
+      </div>
+      <div id="recent-sessions" class="dashboard-recent-grid"></div>
+    </section>
+  </main>
+</div>
+{% endblock %}

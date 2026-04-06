@@ -1,0 +1,37 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("", views.home_page, name="home"),
+    path("auth/", views.auth_page, name="auth"),
+    path("dashboard/", views.dashboard_page, name="dashboard"),
+    path("interview-setup/", views.interview_setup_page, name="interview_setup"),
+    path("interview/<int:session_id>/", views.interview_page, name="interview"),
+    path("results/<int:session_id>/", views.results_page, name="results"),
+    path("history/", views.history_page, name="history"),
+    path("profile/", views.profile_page, name="profile"),
+    path("analytics/", views.analytics_page, name="analytics"),
+    path("leaderboard/", views.leaderboard_page, name="leaderboard"),
+    path("practice/", views.practice_page, name="practice"),
+    path("admin-panel/", views.admin_panel_page, name="admin_panel"),
+    path("api/auth/signup/", views.api_signup, name="api_signup"),
+    path("api/auth/login/", views.api_login, name="api_login"),
+    path("api/auth/logout/", views.api_logout, name="api_logout"),
+    path("api/auth/session/", views.api_session, name="api_session"),
+    path("api/profile/", views.api_profile, name="api_profile"),
+    path("api/resumes/", views.api_resumes, name="api_resumes"),
+    path("api/sessions/", views.api_sessions, name="api_sessions"),
+    path("api/sessions/<int:session_id>/", views.api_session_detail, name="api_session_detail"),
+    path("api/questions/", views.api_questions, name="api_questions"),
+    path("api/emotions/", views.api_emotions, name="api_emotions"),
+    path("api/analytics/", views.api_analytics, name="api_analytics"),
+    path("api/leaderboard/", views.api_leaderboard, name="api_leaderboard"),
+    path("api/admin/overview/", views.api_admin_overview, name="api_admin_overview"),
+    path("api/ai/interview-chat/", views.api_ai_interview_chat, name="api_ai_interview_chat"),
+    path("api/ai/generate-feedback/", views.api_ai_generate_feedback, name="api_ai_generate_feedback"),
+    path("api/ai/interview-coach/", views.api_ai_interview_coach, name="api_ai_interview_coach"),
+    path("api/ai/analyze-emotion/", views.api_ai_analyze_emotion, name="api_ai_analyze_emotion"),
+    path("api/ai/extract-resume/", views.api_ai_extract_resume, name="api_ai_extract_resume"),
+    path("api/media/upload-answer-video/", views.api_upload_answer_video, name="api_upload_answer_video"),
+]

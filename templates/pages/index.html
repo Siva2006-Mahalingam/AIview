@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}InterviewAI - Home{% endblock %}
+{% block content %}
+<div class="page" data-page="index">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">InterviewAI</div>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="{% url 'auth' %}">Sign In</a>
+      </nav>
+    </div>
+  </header>
+  <main class="hero">
+    <div class="container">
+      <div class="badge">3rd Round Interview Preparation</div>
+      <h1>Master Your <span>Final Interview</span> Round</h1>
+      <p>Upload your resume, practice with AI interviews, and receive detailed feedback.</p>
+      <a class="btn btn-primary" href="{% url 'auth' %}">Get Started Free</a>
+    </div>
+  </main>
+  <section id="features" class="features">
+    <div class="container grid-3">
+      <article class="card"><h3>AI-Powered Questions</h3><p>Dynamic questions tailored to your role and experience level.</p></article>
+      <article class="card"><h3>Real-time Feedback</h3><p>Instant insights and practical improvements.</p></article>
+      <article class="card"><h3>Track Progress</h3><p>Monitor your interview performance over time.</p></article>
+    </div>
+  </section>
+</div>
+{% endblock %}
